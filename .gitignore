@@ -1,0 +1,7 @@
+bin/
+node_modules/
+
+# Built by `make web` and embedded into the binary. Kept out of git because it
+# is build output; anteroom still runs without it, serving a plain waiting page.
+/internal/httpserver/web/static/assets/
+/internal/httpserver/web/static/manifest.json
