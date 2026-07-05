@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="dark">
+<title>{{.Title}} — you're in line</title>
+{{if .PlainRefresh}}<meta http-equiv="refresh" content="{{.RefreshSeconds}}">
+{{else}}<noscript><meta http-equiv="refresh" content="{{.RefreshSeconds}}"></noscript>
+{{end}}{{range .Styles}}<link rel="stylesheet" href="{{.}}">
+{{end}}</head>
+<body>
+<main id="anteroom"
+      data-events="{{.EventsPath}}"
+      data-refresh="{{.RefreshSeconds}}"
+      data-position="{{.Position}}"
+      data-waiting="{{.Waiting}}"
+      data-eta="{{.ETASeconds}}"
+      data-paused="{{if .Paused}}1{{else}}0{{end}}"
+      data-degraded="{{if .Degraded}}1{{else}}0{{end}}">
+
+  <p class="sign">
+    <span class="sign__rule"></span>
+    <span class="sign__mark">&#9679;</span>
+    <span>{{.Room}}</span>
+    <span class="sign__rule"></span>
+  </p>
+
+  <h1 class="room-title">{{.Title}}</h1>
+  {{if .Message}}<p class="room-message">{{.Message}}</p>{{end}}
+
+  <p class="board-label">Your position</p>
+  <!-- The number is rendered here too, so a visitor whose scripts never
+       arrive still sees where they stand. The board replaces it on load. -->
+  <div class="board" data-role="board">
+    <span class="board__plain">{{if .Position}}{{.Position}}{{else}}&#8212;{{end}}</span>
+  </div>
+
+  <p class="eta" data-role="eta">
+    {{if .Paused}}Admissions are paused. You keep your place.
+    {{else if eq .Position 1}}You're next.
+    {{else if .ETASeconds}}About {{.ETAText}} to go.
+    {{else}}Working out how long this will take.{{end}}
+  </p>
+
+  <p class="reassurance">
+    Your place is held. Leave this page open and you'll go through
+    automatically — there's no need to reload.
+  </p>
+
+  <p class="notice" data-role="notice" {{if not .Degraded}}hidden{{end}}>
+    We can't reach the queue right now. Your place is held — this page keeps trying.
+  </p>
+
+  <p class="status-bar">
+    <span class="connection" data-role="connection" data-state="reconnecting">Connecting</span>
+    <span class="status-bar__divider">&#183;</span>
+    <span data-role="waiting">{{if .Waiting}}{{.Waiting}} waiting{{end}}</span>
+  </p>
+</main>
+{{range .Scripts}}<script type="module" src="{{.}}"></script>
+{{end}}</body>
+</html>

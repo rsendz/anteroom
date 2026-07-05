@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="dark">
+<title>Anteroom — control room</title>
+{{range .Styles}}<link rel="stylesheet" href="{{.}}">
+{{end}}</head>
+<body>
+<div id="root" data-api="{{.APIPath}}"></div>
+{{if not .Built}}
+<noscript></noscript>
+<p style="max-width:32rem;margin:14vh auto;padding:0 1.5rem;font:16px/1.6 ui-serif,Georgia,serif;color:#e8e2d4;background:#16211f">
+  The control room needs its front-end assets. Build them with <code>make web</code>,
+  or manage rooms through the API under <code>{{.APIPath}}</code>.
+</p>
+{{end}}
+{{range .Scripts}}<script type="module" src="{{.}}"></script>
+{{end}}</body>
+</html>
