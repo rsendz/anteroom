@@ -1,0 +1,427 @@
+/*
+ * The control room shares the waiting page's palette — the same building, seen
+ * from behind the desk — but trades its ceremony for density. Where the
+ * visitor gets one number the size of a wall board, the operator gets every
+ * number at once and the controls to change them.
+ */
+
+:root {
+  --hall: #16211f;
+  --panel: #1b2926;
+  --panel-edge: #2c3f3a;
+  --leaf: #0f1817;
+  --bone: #e8e2d4;
+  --brass: #c9a227;
+  --muted: #7c8a86;
+  --alarm: #d4713f;
+
+  --board: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  --prose: ui-serif, Georgia, "Iowan Old Style", "Times New Roman", serif;
+
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--hall);
+  color: var(--bone);
+  font-family: var(--prose);
+  font-size: 16px;
+}
+
+/* --- Shell -------------------------------------------------------------- */
+
+.shell,
+.gate {
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 6rem;
+}
+
+.gate {
+  max-width: 26rem;
+  padding-top: 14vh;
+}
+
+.sign {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0;
+  font-family: var(--board);
+  font-size: 0.6875rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sign__mark {
+  color: var(--brass);
+}
+
+.masthead {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 0.35rem 1rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--panel-edge);
+  margin-bottom: 2rem;
+}
+
+.masthead .sign {
+  grid-column: 1;
+}
+
+.masthead__title {
+  grid-column: 1;
+  margin: 0.4rem 0 0;
+  font-size: 1.75rem;
+  font-weight: 400;
+  letter-spacing: -0.015em;
+}
+
+.masthead__summary {
+  grid-column: 1;
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-family: var(--board);
+  font-size: 0.8125rem;
+}
+
+.masthead > .button {
+  grid-column: 2;
+  grid-row: 1 / span 4;
+  align-self: end;
+}
+
+/* --- Gate --------------------------------------------------------------- */
+
+.gate__title {
+  margin: 0.6rem 0 0;
+  font-size: 2rem;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+
+.gate__lede {
+  margin: 0.75rem 0 2rem;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.gate__form {
+  display: grid;
+  gap: 1rem;
+  justify-items: start;
+}
+
+.gate__error {
+  margin-top: 1.25rem;
+  color: var(--alarm);
+  font-size: 0.9375rem;
+}
+
+/* --- Panels ------------------------------------------------------------- */
+
+.panels {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.panel {
+  padding: 1.5rem;
+  border: 1px solid var(--panel-edge);
+  border-radius: 0.6rem;
+  background: var(--panel);
+}
+
+.panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.panel__name {
+  margin: 0;
+  font-family: var(--board);
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.panel__route {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-family: var(--board);
+  font-size: 0.75rem;
+  word-break: break-all;
+}
+
+.panel__arrow {
+  color: var(--brass);
+}
+
+.badge {
+  flex-shrink: 0;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-family: var(--board);
+  font-size: 0.6875rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.badge--open {
+  color: var(--brass);
+  border: 1px solid color-mix(in srgb, var(--brass) 40%, transparent);
+  background: color-mix(in srgb, var(--brass) 10%, transparent);
+}
+
+.badge--paused {
+  color: var(--alarm);
+  border: 1px solid color-mix(in srgb, var(--alarm) 45%, transparent);
+  background: color-mix(in srgb, var(--alarm) 12%, transparent);
+}
+
+/* --- Tiles -------------------------------------------------------------- */
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 1px;
+  background: var(--panel-edge);
+  border: 1px solid var(--panel-edge);
+  border-radius: 0.45rem;
+  overflow: hidden;
+  margin-bottom: 1.25rem;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.9rem 1rem;
+  background: var(--leaf);
+}
+
+.tile__value {
+  font-family: var(--board);
+  font-size: 1.375rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.tile__label {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+/* --- Sparkline ---------------------------------------------------------- */
+
+.sparkline {
+  display: block;
+  width: 100%;
+  height: 2.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.sparkline--empty {
+  display: flex;
+  align-items: center;
+  font-family: var(--board);
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.sparkline__line {
+  fill: none;
+  stroke: var(--brass);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+}
+
+.sparkline__area {
+  fill: color-mix(in srgb, var(--brass) 12%, transparent);
+  stroke: none;
+}
+
+/* --- Ledger ------------------------------------------------------------- */
+
+.ledger {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.5rem 1.5rem;
+  margin: 0 0 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--panel-edge);
+}
+
+.ledger__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.8125rem;
+}
+
+.ledger dt {
+  color: var(--muted);
+}
+
+.ledger dd {
+  margin: 0;
+  font-family: var(--board);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Controls ----------------------------------------------------------- */
+
+.rate-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--panel-edge);
+}
+
+.field {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.field__label {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.field__input {
+  width: 7rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--panel-edge);
+  border-radius: 0.35rem;
+  background: var(--leaf);
+  color: var(--bone);
+  font-family: var(--board);
+  font-size: 0.9375rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.field__input--wide {
+  width: 100%;
+  min-width: 16rem;
+}
+
+.field__input:focus-visible,
+.button:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: 2px;
+}
+
+.button {
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--panel-edge);
+  border-radius: 0.35rem;
+  background: var(--leaf);
+  color: var(--bone);
+  font-family: var(--board);
+  font-size: 0.8125rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.button:hover:not(:disabled) {
+  border-color: var(--brass);
+}
+
+.button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.button--primary {
+  color: var(--hall);
+  background: var(--brass);
+  border-color: var(--brass);
+  font-weight: 600;
+}
+
+.button--primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--brass) 85%, white);
+}
+
+.button--danger {
+  color: var(--alarm);
+  border-color: color-mix(in srgb, var(--alarm) 50%, transparent);
+}
+
+.button--danger:hover:not(:disabled) {
+  border-color: var(--alarm);
+}
+
+.button--quiet {
+  color: var(--muted);
+}
+
+.panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--panel-edge);
+}
+
+.confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.confirm__question {
+  font-size: 0.875rem;
+  color: var(--bone);
+}
+
+/* --- Messages ----------------------------------------------------------- */
+
+.banner {
+  margin: 0 0 1.5rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--alarm) 45%, transparent);
+  border-radius: 0.4rem;
+  background: color-mix(in srgb, var(--alarm) 10%, transparent);
+  font-size: 0.9375rem;
+}
+
+.empty {
+  padding: 2.5rem 0;
+  color: var(--muted);
+  text-align: center;
+}
+
+@media (max-width: 32rem) {
+  .masthead {
+    grid-template-columns: 1fr;
+  }
+  .masthead > .button {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: start;
+    margin-top: 1rem;
+  }
+}
