@@ -1,0 +1,64 @@
+# The whole thing, running: a waiting room in front of a demo site, with Redis
+# holding the queue and Kafka receiving the event stream.
+#
+#   docker compose -f deploy/docker-compose.yml up --build
+#
+# Then open http://localhost:8080. The demo is tuned to be watchable by a
+# human: half a visitor per second, three on the site at once.
+
+name: anteroom
+
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  kafka:
+    image: apache/kafka:3.8.0
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      CLUSTER_ID: anteroom-demo-cluster
+
+  demo-origin:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: demo-origin
+    command: ["-listen", ":9000"]
+
+  anteroom:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: anteroom
+    command: ["--config", "/etc/anteroom/anteroom.yaml"]
+    volumes:
+      - ./anteroom.yaml:/etc/anteroom/anteroom.yaml:ro
+    ports:
+      - "8080:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+      # Deliberately not service_healthy: anteroom must start and queue
+      # visitors whether or not Kafka is up. Try `docker compose stop kafka`
+      # and watch the waiting room carry on.
+      kafka:
+        condition: service_started
+      demo-origin:
+        condition: service_started
