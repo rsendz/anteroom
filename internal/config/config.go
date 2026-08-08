@@ -4,6 +4,7 @@ package config
 
 import (
 	"fmt"
+	"net/netip"
 	"net/url"
 	"os"
 	"strconv"
@@ -49,6 +50,21 @@ type Room struct {
 	// the origin's own. Needed when the backend serves several virtual hosts;
 	// wrong when the origin is an external site that expects its own name.
 	PreserveHost bool `yaml:"preserve_host"`
+	// JoinLimitPerIP caps how many visitors may newly enter the queue from one
+	// address per JoinLimitWindow, which is what stops a script taking
+	// thousands of places. It is a pointer so that an explicit 0 (disable the
+	// limit) is distinguishable from the field being absent (use the default).
+	// After ApplyEnvAndDefaults it is never nil; read it through JoinLimit.
+	JoinLimitPerIP  *int     `yaml:"join_limit_per_ip"`
+	JoinLimitWindow Duration `yaml:"join_limit_window"`
+}
+
+// JoinLimit is the resolved per-address join limit; 0 means no limit.
+func (r Room) JoinLimit() int {
+	if r.JoinLimitPerIP == nil {
+		return DefaultJoinLimitPerIP
+	}
+	return *r.JoinLimitPerIP
 }
 
 type Redis struct {
@@ -61,14 +77,18 @@ type Kafka struct {
 }
 
 type Config struct {
-	Listen        string          `yaml:"listen"`
-	AdmitInterval Duration        `yaml:"admit_interval"`
-	CookieSecret  string          `yaml:"cookie_secret"`
-	AdminToken    string          `yaml:"admin_token"`
-	SecureCookies bool            `yaml:"secure_cookies"`
-	Redis         Redis           `yaml:"redis"`
-	Kafka         Kafka           `yaml:"kafka"`
-	Rooms         map[string]Room `yaml:"rooms"`
+	Listen        string   `yaml:"listen"`
+	AdmitInterval Duration `yaml:"admit_interval"`
+	CookieSecret  string   `yaml:"cookie_secret"`
+	AdminToken    string   `yaml:"admin_token"`
+	SecureCookies bool     `yaml:"secure_cookies"`
+	// TrustedProxies lists the CIDRs anteroom sits behind. X-Forwarded-For is
+	// honoured only on requests arriving from these, because the header is
+	// otherwise trivially forged and per-address limits would mean nothing.
+	TrustedProxies []string        `yaml:"trusted_proxies"`
+	Redis          Redis           `yaml:"redis"`
+	Kafka          Kafka           `yaml:"kafka"`
+	Rooms          map[string]Room `yaml:"rooms"`
 }
 
 // Room defaults applied to zero-valued fields.
@@ -77,6 +97,14 @@ const (
 	DefaultMaxActive    = 500
 	DefaultSessionTTL   = 5 * time.Minute
 	DefaultAbandonAfter = 60 * time.Second
+
+	// DefaultJoinLimitPerIP is deliberately loose. Office NAT and mobile
+	// carrier-grade NAT put a great many legitimate visitors behind a single
+	// address, so the default is set to stop a script taking thousands of
+	// places without turning away a crowd arriving from one gateway. The
+	// refused counter on the room snapshot is the signal to raise it.
+	DefaultJoinLimitPerIP  = 120
+	DefaultJoinLimitWindow = time.Minute
 )
 
 // Default returns a Config with server-level defaults; it has no rooms.
@@ -93,11 +121,12 @@ func Default() Config {
 // DefaultRoom returns a Room for origin with all defaults applied.
 func DefaultRoom(origin string) Room {
 	return Room{
-		Origin:       origin,
-		Rate:         DefaultRate,
-		MaxActive:    DefaultMaxActive,
-		SessionTTL:   Duration(DefaultSessionTTL),
-		AbandonAfter: Duration(DefaultAbandonAfter),
+		Origin:          origin,
+		Rate:            DefaultRate,
+		MaxActive:       DefaultMaxActive,
+		SessionTTL:      Duration(DefaultSessionTTL),
+		AbandonAfter:    Duration(DefaultAbandonAfter),
+		JoinLimitWindow: Duration(DefaultJoinLimitWindow),
 	}
 }
 
@@ -193,6 +222,13 @@ func (c *Config) applyRoomDefaults() {
 		if r.Title == "" {
 			r.Title = name
 		}
+		if r.JoinLimitPerIP == nil {
+			limit := DefaultJoinLimitPerIP
+			r.JoinLimitPerIP = &limit
+		}
+		if r.JoinLimitWindow == 0 {
+			r.JoinLimitWindow = Duration(DefaultJoinLimitWindow)
+		}
 		c.Rooms[name] = r
 	}
 }
@@ -209,6 +245,11 @@ func (c *Config) Validate() error {
 	}
 	if c.AdmitInterval.Std() <= 0 {
 		return fmt.Errorf("admit_interval must be positive")
+	}
+	for _, cidr := range c.TrustedProxies {
+		if _, err := netip.ParsePrefix(strings.TrimSpace(cidr)); err != nil {
+			return fmt.Errorf("trusted_proxies: %q is not a CIDR block such as 10.0.0.0/8: %w", cidr, err)
+		}
 	}
 	catchAlls, hosts := 0, map[string]string{}
 	for name, r := range c.Rooms {
@@ -230,6 +271,12 @@ func (c *Config) Validate() error {
 		}
 		if r.SessionTTL.Std() <= 0 || r.AbandonAfter.Std() <= 0 {
 			return fmt.Errorf("room %q: session_ttl and abandon_after must be positive", name)
+		}
+		if r.JoinLimit() < 0 {
+			return fmt.Errorf("room %q: join_limit_per_ip cannot be negative (use 0 to disable)", name)
+		}
+		if r.JoinLimitWindow.Std() <= 0 {
+			return fmt.Errorf("room %q: join_limit_window must be positive", name)
 		}
 		if r.MatchHost == "" {
 			catchAlls++

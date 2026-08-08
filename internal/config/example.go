@@ -22,6 +22,14 @@ admin_token: "%s"
 # Set to true when visitors reach anteroom over HTTPS.
 secure_cookies: false
 
+# The networks anteroom sits behind. X-Forwarded-For is believed only on
+# requests arriving from these, because anyone can set that header and
+# per-address limits would otherwise mean nothing. Leave empty if visitors
+# connect to anteroom directly.
+trusted_proxies: []
+#   - 10.0.0.0/8        # your VPC or load balancer
+#   - 172.16.0.0/12
+
 # How often admissions are considered. The default is fine.
 admit_interval: 250ms
 
@@ -60,6 +68,16 @@ rooms:
     # A queued visitor whose page has gone quiet for this long is assumed to
     # have left, and stops holding up the people behind them.
     abandon_after: 60s
+
+    # How many visitors may newly join the queue from one address in
+    # join_limit_window. This is what stops a script taking thousands of
+    # places. Set to 0 to disable.
+    #
+    # Keep it generous: office networks and mobile carriers put many real
+    # people behind a single address. Watch total_refused on the dashboard —
+    # if it climbs during normal traffic, the limit is too tight.
+    join_limit_per_ip: 120
+    join_limit_window: 1m
 
     # Shown on the waiting page.
     title: "Just a moment"
