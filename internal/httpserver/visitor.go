@@ -5,6 +5,7 @@ import (
 	"math"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/luisresendez/anteroom/internal/config"
 	"github.com/luisresendez/anteroom/internal/events"
@@ -56,7 +57,7 @@ func (s *Server) handleVisitor(w http.ResponseWriter, r *http.Request) {
 	room := s.cfg.Rooms[roomName]
 	v := s.identify(r, roomName)
 
-	res, err := s.store.Resolve(r.Context(), roomName, v.id)
+	res, err := s.store.Resolve(r.Context(), roomName, v.id, s.joinBucket(r))
 	if err != nil {
 		if r.Context().Err() != nil {
 			return // the visitor went away mid-request
@@ -75,6 +76,11 @@ func (s *Server) handleVisitor(w http.ResponseWriter, r *http.Request) {
 			s.setCookie(w, r, roomName, v, token.StatusAdmitted)
 		}
 		s.proxies[roomName].ServeHTTP(w, r)
+		return
+	}
+
+	if res.Refused {
+		s.renderRefused(w, roomName, room)
 		return
 	}
 
@@ -151,6 +157,60 @@ func (s *Server) renderWaiting(w http.ResponseWriter, r *http.Request, name stri
 		// left to send the visitor.
 		s.log.Error("anteroom: rendering the waiting page failed", "room", name, "err", err)
 	}
+}
+
+// joinBucket is the address a per-address join limit is counted against, or
+// "" when it cannot be determined and no limit should apply.
+func (s *Server) joinBucket(r *http.Request) string {
+	if s.ipResolver == nil {
+		return ""
+	}
+	if s.ipResolver.looksProxiedButUntrusted(r) {
+		s.warnUntrustedProxy(r.RemoteAddr)
+	}
+	addr, ok := s.ipResolver.clientIP(r)
+	if !ok {
+		return ""
+	}
+	return bucket(addr)
+}
+
+// warnUntrustedProxy tells the operator, at most once a minute, that anteroom
+// is behind something it was not told to trust.
+func (s *Server) warnUntrustedProxy(peer string) {
+	now := time.Now().Unix()
+	last := s.lastProxyWarning.Load()
+	if now-last < 60 || !s.lastProxyWarning.CompareAndSwap(last, now) {
+		return
+	}
+	s.log.Warn("anteroom: requests carry X-Forwarded-For from an untrusted peer, "+
+		"so every visitor shares one rate-limit budget; add the proxy to trusted_proxies",
+		"peer", peer)
+}
+
+// renderRefused answers a visitor turned away by the join limit. No cookie is
+// issued: they were never given a place, so there is nothing to remember.
+func (s *Server) renderRefused(w http.ResponseWriter, name string, room config.Room) {
+	title := room.Title
+	if title == "" {
+		title = name
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Retry-After", "60")
+	w.Header().Set("X-Anteroom-Status", "refused")
+	w.WriteHeader(http.StatusTooManyRequests)
+
+	page := refusedPage{Title: title, Scripts: nil, Styles: s.assets.stylesFor("queue")}
+	if err := s.tmpl.ExecuteTemplate(w, "refused.html", page); err != nil {
+		s.log.Error("anteroom: rendering the refused page failed", "room", name, "err", err)
+	}
+}
+
+type refusedPage struct {
+	Title   string
+	Scripts []string
+	Styles  []string
 }
 
 func (s *Server) renderUnknownHost(w http.ResponseWriter, r *http.Request) {

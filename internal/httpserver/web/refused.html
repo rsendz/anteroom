@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="dark">
+<title>{{.Title}} — too many requests</title>
+{{range .Styles}}<link rel="stylesheet" href="{{.}}">
+{{end}}</head>
+<body>
+<main id="anteroom">
+  <p class="sign">
+    <span class="sign__rule"></span>
+    <span class="sign__mark">&#9679;</span>
+    <span>{{.Title}}</span>
+    <span class="sign__rule"></span>
+  </p>
+
+  <h1 class="room-title">Too many at once</h1>
+
+  <p class="eta">A lot of requests are arriving from your network.</p>
+
+  <p class="reassurance">
+    Wait a minute and try again. If you are on an office or campus network,
+    someone nearby may be using the same connection.
+  </p>
+</main>
+</body>
+</html>

@@ -56,8 +56,10 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	ticker := time.NewTicker(s.sseInterval)
 	defer ticker.Stop()
 
+	joinBucket := s.joinBucket(r)
+
 	for {
-		res, err := s.store.Resolve(r.Context(), roomName, p.ID)
+		res, err := s.store.Resolve(r.Context(), roomName, p.ID, joinBucket)
 		if err != nil {
 			if r.Context().Err() != nil {
 				return
@@ -68,6 +70,10 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 			if !writeEvent(w, rc, "stalled", struct{}{}) {
 				return
 			}
+		} else if res.Refused {
+			// Their address is over its join limit. Close the stream and let
+			// the page reload into the normal path, which explains why.
+			return
 		} else if res.Admitted {
 			// The page reloads on this, and the reload is what gets proxied.
 			writeEvent(w, rc, "admitted", struct{}{})

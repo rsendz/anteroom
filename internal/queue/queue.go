@@ -17,6 +17,10 @@ type RoomConfig struct {
 	SessionTTL   time.Duration `json:"-"`
 	AbandonAfter time.Duration `json:"-"`
 	Paused       bool          `json:"paused"`
+	// JoinLimit caps how many visitors may newly enter the queue from one
+	// address per JoinWindow. Zero disables the limit.
+	JoinLimit  int           `json:"join_limit"`
+	JoinWindow time.Duration `json:"-"`
 }
 
 // Snapshot is a point-in-time view of one room, used by the admin API and the
@@ -31,10 +35,16 @@ type Snapshot struct {
 	SessionTTLSecs   int64 `json:"session_ttl_secs"`
 	AbandonAfterSecs int64 `json:"abandon_after_secs"`
 	Paused           bool  `json:"paused"`
+	JoinLimit        int   `json:"join_limit"`
+	JoinWindowSecs   int64 `json:"join_window_secs"`
 	TotalJoined      int64 `json:"total_joined"`
 	TotalAdmitted    int64 `json:"total_admitted"`
 	TotalExpired     int64 `json:"total_expired"`
 	TotalAbandoned   int64 `json:"total_abandoned"`
+	// TotalRefused counts visitors turned away by the per-address join limit.
+	// A climbing number means the limit is too tight for the traffic, so it is
+	// surfaced rather than hidden.
+	TotalRefused int64 `json:"total_refused"`
 }
 
 // AdmitResult reports what one admission pass changed. The caller turns each
@@ -61,6 +71,9 @@ type Resolution struct {
 	// Joined reports that this call put them in the queue, so the caller knows
 	// to emit a joined event exactly once.
 	Joined bool
+	// Refused means the visitor's address has entered the queue too many times
+	// in the current window and this attempt was turned away.
+	Refused bool
 }
 
 // Store is the queue state. Every method is scoped to a room; rooms never
@@ -70,7 +83,11 @@ type Store interface {
 	// refreshes a live session and reports the visitor as admitted, or places
 	// them in the queue (keeping any place they already hold, refreshing their
 	// heartbeat) and reports their position.
-	Resolve(ctx context.Context, room, id string) (Resolution, error)
+	//
+	// bucket identifies the visitor's address for the per-address join limit.
+	// An empty bucket skips the limit, which is what happens when the client
+	// address cannot be determined.
+	Resolve(ctx context.Context, room, id, bucket string) (Resolution, error)
 
 	// Admit performs one atomic admission pass: reap abandoned waiters, expire
 	// idle sessions, refill the rate budget, and admit as many visitors as the

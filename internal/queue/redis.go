@@ -51,18 +51,35 @@ func (s *RedisStore) Join(ctx context.Context, room, id string) (int64, error) {
 	return pos, nil
 }
 
-func (s *RedisStore) Resolve(ctx context.Context, room, id string) (Resolution, error) {
-	raw, err := resolveScript.Run(ctx, s.rdb,
-		keysFor(room, "waiting", "seen", "active", "conf", "seq", "stats"),
-		id, unixMillis(s.now()),
+func (s *RedisStore) Resolve(ctx context.Context, room, id, bucket string) (Resolution, error) {
+	// The limit itself lives in the room's settings and is read inside the
+	// script, so a change through the admin API takes effect at once and the
+	// request path stays a single round trip. Without a bucket there is nobody
+	// to count against, so the limit is skipped rather than lumping every such
+	// visitor into one shared budget.
+	applies := "0"
+	joinKey := key(room, "joinbudget")
+	if bucket != "" {
+		applies = "1"
+		joinKey = key(room, "join:"+bucket)
+	}
+
+	keys := append(keysFor(room, "waiting", "seen", "active", "conf", "seq", "stats"), joinKey)
+	raw, err := resolveScript.Run(ctx, s.rdb, keys,
+		id, unixMillis(s.now()), applies,
 	).Int64Slice()
 	if err != nil {
 		return Resolution{}, fmt.Errorf("queue: resolve %s/%s: %w", room, id, err)
 	}
-	if len(raw) != 3 {
-		return Resolution{}, fmt.Errorf("queue: resolve %s: reply had %d parts, want 3", room, len(raw))
+	if len(raw) != 4 {
+		return Resolution{}, fmt.Errorf("queue: resolve %s: reply had %d parts, want 4", room, len(raw))
 	}
-	return Resolution{Admitted: raw[0] == 1, Position: raw[1], Joined: raw[2] == 1}, nil
+	return Resolution{
+		Admitted: raw[0] == 1,
+		Position: raw[1],
+		Joined:   raw[2] == 1,
+		Refused:  raw[3] == 1,
+	}, nil
 }
 
 func (s *RedisStore) Position(ctx context.Context, room, id string) (int64, error) {
@@ -123,8 +140,8 @@ func (s *RedisStore) Snapshot(ctx context.Context, room string) (Snapshot, error
 	if err != nil {
 		return Snapshot{}, fmt.Errorf("queue: snapshot %s: %w", room, err)
 	}
-	if len(raw) != 11 {
-		return Snapshot{}, fmt.Errorf("queue: snapshot %s: reply had %d parts, want 11", room, len(raw))
+	if len(raw) != 14 {
+		return Snapshot{}, fmt.Errorf("queue: snapshot %s: reply had %d parts, want 14", room, len(raw))
 	}
 	f := make([]float64, len(raw))
 	for i, v := range raw {
@@ -144,6 +161,9 @@ func (s *RedisStore) Snapshot(ctx context.Context, room string) (Snapshot, error
 		TotalAdmitted:    int64(f[8]),
 		TotalExpired:     int64(f[9]),
 		TotalAbandoned:   int64(f[10]),
+		TotalRefused:     int64(f[11]),
+		JoinLimit:        int(f[12]),
+		JoinWindowSecs:   int64(f[13]),
 	}, nil
 }
 
@@ -195,6 +215,8 @@ func confFields(cfg RoomConfig) []any {
 		"cap", strconv.Itoa(cfg.MaxActive),
 		"ttl_secs", strconv.FormatInt(int64(cfg.SessionTTL.Seconds()), 10),
 		"abandon_secs", strconv.FormatInt(int64(cfg.AbandonAfter.Seconds()), 10),
+		"join_limit", strconv.Itoa(cfg.JoinLimit),
+		"join_window_secs", strconv.FormatInt(int64(cfg.JoinWindow.Seconds()), 10),
 	}
 }
 

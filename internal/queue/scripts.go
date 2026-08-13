@@ -18,11 +18,13 @@ local function readConf(key)
   local c = {}
   for i = 1, #flat, 2 do c[flat[i]] = flat[i + 1] end
   return {
-    rate    = tonumber(c['rate']) or 0,
-    cap     = tonumber(c['cap']) or 0,
-    ttl     = tonumber(c['ttl_secs']) or 0,
-    abandon = tonumber(c['abandon_secs']) or 0,
-    paused  = c['paused'] == '1',
+    rate        = tonumber(c['rate']) or 0,
+    cap         = tonumber(c['cap']) or 0,
+    ttl         = tonumber(c['ttl_secs']) or 0,
+    abandon     = tonumber(c['abandon_secs']) or 0,
+    paused      = c['paused'] == '1',
+    join_limit  = tonumber(c['join_limit']) or 0,
+    join_window = tonumber(c['join_window_secs']) or 0,
   }
 end
 `
@@ -119,19 +121,20 @@ return {abandoned, expired, admitted}
 // one atomic step means a visitor admitted between two of their own requests
 // is never bounced back into the queue by a race.
 //
-//	KEYS: waiting, seen, active, conf, seq, stats
-//	ARGV: id, now_millis
-//	Returns: {admitted, position, joined}
-var resolveScript = redis.NewScript(`
+//	KEYS: waiting, seen, active, conf, seq, stats, joinbudget
+//	ARGV: id, now_millis, limit_applies
+//	Returns: {admitted, position, joined, refused}
+var resolveScript = redis.NewScript(luaPrelude + `
 local id     = ARGV[1]
 local now_s  = tonumber(ARGV[2]) / 1000
-local ttl    = tonumber(redis.call('HGET', KEYS[4], 'ttl_secs')) or 0
+local conf   = readConf(KEYS[4])
+local ttl    = conf.ttl
 
 local score = tonumber(redis.call('ZSCORE', KEYS[3], id))
 if score then
   if ttl <= 0 or score >= now_s - ttl then
     redis.call('ZADD', KEYS[3], now_s, id)
-    return {1, 0, 0}
+    return {1, 0, 0, 0}
   end
   -- The session went idle past its TTL; drop it and re-queue them below.
   redis.call('ZREM', KEYS[3], id)
@@ -140,13 +143,29 @@ end
 local joined = 0
 local rank = redis.call('ZRANK', KEYS[1], id)
 if not rank then
+  -- Only a genuinely new entry costs budget. A visitor already in line who
+  -- reloads or reconnects their stream must never be charged, or an impatient
+  -- person would throttle themselves out of their own place.
+  if ARGV[3] == '1' and conf.join_limit > 0 and conf.join_window > 0 then
+    local used = redis.call('INCR', KEYS[7])
+    if used == 1 then
+      redis.call('EXPIRE', KEYS[7], conf.join_window)
+    end
+    if used > conf.join_limit then
+      -- Counted before refusing, so hammering the door cannot reset the
+      -- window by keeping the counter below the limit.
+      redis.call('HINCRBY', KEYS[6], 'refused', 1)
+      return {0, 0, 0, 1}
+    end
+  end
+
   redis.call('ZADD', KEYS[1], redis.call('INCR', KEYS[5]), id)
   redis.call('HINCRBY', KEYS[6], 'joined', 1)
   rank = redis.call('ZRANK', KEYS[1], id)
   joined = 1
 end
 redis.call('ZADD', KEYS[2], now_s, id)
-return {0, rank + 1, joined}
+return {0, rank + 1, joined, 0}
 `)
 
 // positionScript returns a waiting visitor's 1-based place in line, or 0 when
@@ -263,5 +282,8 @@ return {
   tostring(stat('admitted')),
   tostring(stat('expired')),
   tostring(stat('abandoned')),
+  tostring(stat('refused')),
+  tostring(conf.join_limit),
+  tostring(conf.join_window),
 }
 `)

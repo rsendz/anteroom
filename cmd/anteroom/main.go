@@ -230,6 +230,8 @@ func seedRooms(ctx context.Context, store queue.Store, cfg config.Config, reseed
 			MaxActive:    room.MaxActive,
 			SessionTTL:   room.SessionTTL.Std(),
 			AbandonAfter: room.AbandonAfter.Std(),
+			JoinLimit:    room.JoinLimit(),
+			JoinWindow:   room.JoinLimitWindow.Std(),
 		}
 		if err := store.Seed(ctx, name, want, reseed); err != nil {
 			return err

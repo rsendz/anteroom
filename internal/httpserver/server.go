@@ -7,6 +7,7 @@ package httpserver
 import (
 	"context"
 	"embed"
+	"fmt"
 	"html/template"
 	"io/fs"
 	"log/slog"
@@ -14,6 +15,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/luisresendez/anteroom/internal/config"
@@ -37,10 +39,13 @@ type Server struct {
 	emitter events.Emitter
 	log     *slog.Logger
 
-	proxies map[string]*httputil.ReverseProxy
-	tmpl    *template.Template
-	stats   *statsCache
-	assets  assets
+	proxies    map[string]*httputil.ReverseProxy
+	tmpl       *template.Template
+	stats      *statsCache
+	assets     assets
+	ipResolver *clientIPResolver
+	// lastProxyWarning rate-limits the untrusted-proxy warning (unix seconds).
+	lastProxyWarning atomic.Int64
 
 	// sseInterval is how often a waiting page is told its position.
 	sseInterval time.Duration
@@ -52,6 +57,10 @@ func New(cfg config.Config, store queue.Store, emitter events.Emitter, log *slog
 	if err != nil {
 		return nil, err
 	}
+	ipResolver, err := newClientIPResolver(cfg.TrustedProxies)
+	if err != nil {
+		return nil, fmt.Errorf("trusted_proxies: %w", err)
+	}
 	s := &Server{
 		cfg:         cfg,
 		store:       store,
@@ -62,6 +71,7 @@ func New(cfg config.Config, store queue.Store, emitter events.Emitter, log *slog
 		tmpl:        tmpl,
 		stats:       newStatsCache(store, cfg, log),
 		assets:      loadAssets(webFS, log),
+		ipResolver:  ipResolver,
 		sseInterval: 2 * time.Second,
 	}
 	for name, room := range cfg.Rooms {
