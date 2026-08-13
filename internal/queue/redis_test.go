@@ -15,6 +15,7 @@ import (
 type fixture struct {
 	t     *testing.T
 	store *RedisStore
+	redis *miniredis.Miniredis
 	clock time.Time
 	ctx   context.Context
 }
@@ -30,6 +31,7 @@ func newFixture(t *testing.T) *fixture {
 	f := &fixture{
 		t:     t,
 		store: NewRedisStore(rdb),
+		redis: mr,
 		clock: time.Date(2026, 9, 4, 12, 0, 0, 0, time.UTC),
 		ctx:   context.Background(),
 	}
@@ -102,9 +104,16 @@ func TestJoinReturnsPositionAndIsIdempotent(t *testing.T) {
 	}
 }
 
+// resolve stands in for a visitor request from an address with no join limit
+// applied; resolveFrom exercises the limit.
 func (f *fixture) resolve(id string) Resolution {
 	f.t.Helper()
-	res, err := f.store.Resolve(f.ctx, testRoom, id)
+	return f.resolveFrom(id, "")
+}
+
+func (f *fixture) resolveFrom(id, bucket string) Resolution {
+	f.t.Helper()
+	res, err := f.store.Resolve(f.ctx, testRoom, id, bucket)
 	if err != nil {
 		f.t.Fatalf("resolve %s: %v", id, err)
 	}
@@ -191,6 +200,137 @@ func TestResolveRefreshesHeartbeat(t *testing.T) {
 	}
 	if !slices.Equal(res.Admitted, []string{"stays"}) {
 		t.Errorf("admitted %v, want [stays]", res.Admitted)
+	}
+}
+
+// seedJoinLimit configures a room with a per-address join limit.
+func (f *fixture) seedJoinLimit(limit int, window time.Duration) {
+	f.t.Helper()
+	cfg := RoomConfig{
+		Rate: 1, MaxActive: 100, SessionTTL: time.Minute, AbandonAfter: time.Hour,
+		JoinLimit: limit, JoinWindow: window,
+	}
+	if err := f.store.Seed(f.ctx, testRoom, cfg, true); err != nil {
+		f.t.Fatalf("seed: %v", err)
+	}
+}
+
+func TestJoinLimitRefusesAfterTheLimit(t *testing.T) {
+	f := newFixture(t)
+	f.seedJoinLimit(3, time.Minute)
+
+	for i := range 3 {
+		res := f.resolveFrom(fmt.Sprintf("v%d", i), "198.51.100.4")
+		if res.Refused {
+			t.Fatalf("visitor %d was refused while still inside the limit", i)
+		}
+		if !res.Joined {
+			t.Fatalf("visitor %d did not join", i)
+		}
+	}
+
+	res := f.resolveFrom("one-too-many", "198.51.100.4")
+	if !res.Refused {
+		t.Error("the fourth visitor from one address was not refused")
+	}
+	if res.Joined || res.Position != 0 {
+		t.Errorf("a refused visitor was still queued: %+v", res)
+	}
+	if snap := f.snapshot(); snap.Waiting != 3 || snap.TotalRefused != 1 {
+		t.Errorf("waiting=%d refused=%d, want 3 and 1", snap.Waiting, snap.TotalRefused)
+	}
+}
+
+func TestJoinLimitDoesNotChargeReturningVisitors(t *testing.T) {
+	// A visitor already in line who reloads, or whose stream reconnects, must
+	// never spend budget: an impatient person would otherwise throttle
+	// themselves out of the place they already hold.
+	f := newFixture(t)
+	f.seedJoinLimit(2, time.Minute)
+
+	first := f.resolveFrom("a", "198.51.100.4")
+	if !first.Joined {
+		t.Fatal("first visitor did not join")
+	}
+	for range 20 {
+		res := f.resolveFrom("a", "198.51.100.4")
+		if res.Refused {
+			t.Fatal("a visitor already in line was refused on reload")
+		}
+		if res.Position != 1 {
+			t.Fatalf("position = %d, want 1", res.Position)
+		}
+	}
+	// The budget is untouched, so a genuine second visitor still gets in.
+	if res := f.resolveFrom("b", "198.51.100.4"); res.Refused {
+		t.Error("reloads consumed the budget of a second real visitor")
+	}
+}
+
+func TestJoinLimitCountsRefusalsSoHammeringCannotResetTheWindow(t *testing.T) {
+	f := newFixture(t)
+	f.seedJoinLimit(1, time.Minute)
+	f.resolveFrom("a", "198.51.100.4")
+
+	// Keep knocking. Every attempt is counted, so the window never rolls over
+	// just because the caller stopped succeeding.
+	for i := range 10 {
+		if res := f.resolveFrom(fmt.Sprintf("bot%d", i), "198.51.100.4"); !res.Refused {
+			t.Fatalf("attempt %d got in past the limit", i)
+		}
+	}
+	if snap := f.snapshot(); snap.TotalRefused != 10 {
+		t.Errorf("TotalRefused = %d, want 10", snap.TotalRefused)
+	}
+}
+
+func TestJoinLimitWindowExpires(t *testing.T) {
+	f := newFixture(t)
+	f.seedJoinLimit(1, 30*time.Second)
+	f.resolveFrom("a", "198.51.100.4")
+	if res := f.resolveFrom("b", "198.51.100.4"); !res.Refused {
+		t.Fatal("second visitor was not refused inside the window")
+	}
+
+	// miniredis only expires keys when its own clock is advanced.
+	f.redis.FastForward(31 * time.Second)
+
+	if res := f.resolveFrom("c", "198.51.100.4"); res.Refused {
+		t.Error("the budget did not recover after the window elapsed")
+	}
+}
+
+func TestJoinLimitIsPerAddress(t *testing.T) {
+	f := newFixture(t)
+	f.seedJoinLimit(1, time.Minute)
+
+	if res := f.resolveFrom("a", "198.51.100.4"); res.Refused {
+		t.Fatal("first address was refused")
+	}
+	if res := f.resolveFrom("b", "198.51.100.5"); res.Refused {
+		t.Error("a different address was refused on the first address's budget")
+	}
+}
+
+func TestJoinLimitSkippedWithoutABucket(t *testing.T) {
+	// When the client address cannot be determined there is nobody to count
+	// against, and lumping everyone into one bucket would throttle the world.
+	f := newFixture(t)
+	f.seedJoinLimit(1, time.Minute)
+	for i := range 5 {
+		if res := f.resolveFrom(fmt.Sprintf("v%d", i), ""); res.Refused {
+			t.Fatalf("visitor %d was refused with no bucket to count against", i)
+		}
+	}
+}
+
+func TestJoinLimitDisabledByZero(t *testing.T) {
+	f := newFixture(t)
+	f.seedJoinLimit(0, time.Minute)
+	for i := range 10 {
+		if res := f.resolveFrom(fmt.Sprintf("v%d", i), "198.51.100.4"); res.Refused {
+			t.Fatalf("visitor %d was refused though the limit is disabled", i)
+		}
 	}
 }
 
