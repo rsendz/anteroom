@@ -38,6 +38,8 @@ type fakeStore struct {
 	snapshotErr error
 
 	resolveCalls []string
+	buckets      []string
+	refuseBucket string
 	config       *queue.RoomConfig
 	paused       *bool
 	flushed      int
@@ -53,12 +55,16 @@ func newFakeStore() *fakeStore {
 	}
 }
 
-func (f *fakeStore) Resolve(_ context.Context, room, id string) (queue.Resolution, error) {
+func (f *fakeStore) Resolve(_ context.Context, room, id, bucket string) (queue.Resolution, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.resolveCalls = append(f.resolveCalls, room+"/"+id)
+	f.buckets = append(f.buckets, bucket)
 	if f.resolveErr != nil {
 		return queue.Resolution{}, f.resolveErr
+	}
+	if f.refuseBucket != "" && bucket == f.refuseBucket {
+		return queue.Resolution{Refused: true}, nil
 	}
 	res, ok := f.resolution[id]
 	if !ok {
@@ -66,6 +72,15 @@ func (f *fakeStore) Resolve(_ context.Context, room, id string) (queue.Resolutio
 		return queue.Resolution{Position: 7, Joined: true}, nil
 	}
 	return res, nil
+}
+
+func (f *fakeStore) lastBucket() string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.buckets) == 0 {
+		return ""
+	}
+	return f.buckets[len(f.buckets)-1]
 }
 
 func (f *fakeStore) Admit(context.Context, string) (queue.AdmitResult, error) {
@@ -159,6 +174,15 @@ type harness struct {
 
 func newHarness(t *testing.T, rooms map[string]config.Room) *harness {
 	t.Helper()
+	return newHarnessWith(t, rooms, nil)
+}
+
+// newHarnessWith allows the test to declare trusted proxies. Because the
+// harness talks to a real listener, the peer address is always loopback;
+// trusting it is how a test controls the apparent client address, which is
+// also exactly how anteroom runs behind a load balancer.
+func newHarnessWith(t *testing.T, rooms map[string]config.Room, trustedProxies []string) *harness {
+	t.Helper()
 
 	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-From-Origin", "yes")
@@ -181,6 +205,7 @@ func newHarness(t *testing.T, rooms map[string]config.Room) *harness {
 	cfg.CookieSecret = testSecret
 	cfg.AdminToken = adminToken
 	cfg.Rooms = rooms
+	cfg.TrustedProxies = trustedProxies
 	if err := cfg.ApplyEnvAndDefaults(); err != nil {
 		t.Fatal(err)
 	}
@@ -456,6 +481,60 @@ func TestOriginFailureIsReportedPlainly(t *testing.T) {
 	}
 	if got := body(t, resp); !strings.Contains(got, "not responding") {
 		t.Errorf("body = %q", got)
+	}
+}
+
+func TestRefusedVisitorGets429AndNoCookie(t *testing.T) {
+	h := newHarnessWith(t, nil, []string{"127.0.0.0/8", "::1/128"})
+	h.store.mu.Lock()
+	h.store.refuseBucket = "203.0.113.5"
+	h.store.mu.Unlock()
+
+	resp := h.get("/", func(r *http.Request) { r.Header.Set("X-Forwarded-For", "203.0.113.5") })
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want 429", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Retry-After"); got == "" {
+		t.Error("no Retry-After on the refusal")
+	}
+	if got := resp.Header.Get("X-Anteroom-Status"); got != "refused" {
+		t.Errorf("X-Anteroom-Status = %q, want refused", got)
+	}
+	if resp.Header.Get("X-From-Origin") != "" {
+		t.Error("a refused visitor reached the origin")
+	}
+	// No place was granted, so there is nothing to remember them by.
+	if c := visitorCookie(t, resp); c != nil {
+		t.Error("a cookie was issued to a refused visitor")
+	}
+	if page := body(t, resp); !strings.Contains(page, "Too many at once") {
+		t.Errorf("refusal page looks wrong:\n%s", page)
+	}
+}
+
+func TestJoinBucketComesFromTrustedForwardedHeader(t *testing.T) {
+	h := newHarnessWith(t, nil, []string{"127.0.0.0/8", "::1/128"})
+	h.get("/", func(r *http.Request) { r.Header.Set("X-Forwarded-For", "198.51.100.7") })
+	if got := h.store.lastBucket(); got != "198.51.100.7" {
+		t.Errorf("store received bucket %q, want the forwarded client address", got)
+	}
+}
+
+func TestJoinBucketIgnoresSpoofedForwardedHeader(t *testing.T) {
+	// No trusted proxies: a visitor must not be able to pick their own bucket
+	// by setting the header, or the limit is trivially escaped.
+	h := newHarness(t, nil)
+	h.get("/", func(r *http.Request) { r.Header.Set("X-Forwarded-For", "203.0.113.99") })
+	if got := h.store.lastBucket(); got == "203.0.113.99" {
+		t.Error("a spoofed X-Forwarded-For chose the rate-limit bucket")
+	}
+}
+
+func TestJoinBucketGroupsIPv6Clients(t *testing.T) {
+	h := newHarnessWith(t, nil, []string{"127.0.0.0/8", "::1/128"})
+	h.get("/", func(r *http.Request) { r.Header.Set("X-Forwarded-For", "2001:db8:1:2::9") })
+	if got := h.store.lastBucket(); got != "2001:db8:1:2::/64" {
+		t.Errorf("store received bucket %q, want the containing /64", got)
 	}
 }
 
