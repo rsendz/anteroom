@@ -13,6 +13,9 @@ export type Snapshot = {
   total_admitted: number;
   total_expired: number;
   total_abandoned: number;
+  total_refused: number;
+  join_limit: number;
+  join_window_secs: number;
 };
 
 export type Room = Snapshot & {

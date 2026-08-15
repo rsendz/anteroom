@@ -414,6 +414,20 @@ body {
   text-align: center;
 }
 
+.warn {
+  margin: 0 0 1.5rem;
+  padding: 0.7rem 0.9rem;
+  border-left: 2px solid var(--alarm);
+  background: color-mix(in srgb, var(--alarm) 8%, transparent);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.warn code {
+  font-family: var(--board);
+  font-size: 0.8125rem;
+}
+
 @media (max-width: 32rem) {
   .masthead {
     grid-template-columns: 1fr;

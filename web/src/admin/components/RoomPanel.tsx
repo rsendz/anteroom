@@ -55,6 +55,18 @@ export const RoomPanel = memo(function RoomPanel({
         <Ledger label="Idle limit" value={`${room.session_ttl_secs}s`} />
       </dl>
 
+      {/* Refusals are worth calling out rather than burying in the ledger: a
+          climbing count during ordinary traffic means the per-address limit is
+          turning real people away, which is invisible from the origin. */}
+      {room.total_refused > 0 ? (
+        <p className="warn">
+          <strong>{format(room.total_refused)}</strong> turned away by the limit of{" "}
+          {format(room.join_limit)} joins per address every {room.join_window_secs}s. If these are
+          real visitors behind an office or mobile network, raise{" "}
+          <code>join_limit_per_ip</code>.
+        </p>
+      ) : null}
+
       {/* Keyed on the live settings: when they change (here or from another
           operator's browser) the inputs reset to what the room is actually
           doing, rather than showing a stale edit. */}
