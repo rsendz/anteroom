@@ -34,6 +34,64 @@ func (d Duration) MarshalYAML() (any, error) { return time.Duration(d).String(),
 
 func (d Duration) Std() time.Duration { return time.Duration(d) }
 
+// Timestamp is an RFC 3339 instant, e.g. 2026-11-20T10:00:00Z. A zero value
+// means the field was not set.
+type Timestamp struct{ time.Time }
+
+func (t *Timestamp) UnmarshalYAML(node *yaml.Node) error {
+	var s string
+	if err := node.Decode(&s); err != nil {
+		return err
+	}
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	parsed, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return fmt.Errorf("invalid time %q: want RFC 3339 such as 2026-11-20T10:00:00Z", s)
+	}
+	t.Time = parsed
+	return nil
+}
+
+func (t Timestamp) MarshalYAML() (any, error) {
+	if t.IsZero() {
+		return nil, nil
+	}
+	return t.Format(time.RFC3339), nil
+}
+
+// Schedule opens a room at a fixed time, which is what a ticket sale or a
+// product drop needs. Visitors may line up from QueueOpensAt, nobody is
+// admitted until AdmitsAt, and no new admissions happen after ClosesAt.
+type Schedule struct {
+	QueueOpensAt Timestamp `yaml:"queue_opens_at"`
+	AdmitsAt     Timestamp `yaml:"admits_at"`
+	ClosesAt     Timestamp `yaml:"closes_at"`
+}
+
+// IsSet reports whether this room has any scheduled window at all.
+func (s Schedule) IsSet() bool {
+	return !s.QueueOpensAt.IsZero() || !s.AdmitsAt.IsZero() || !s.ClosesAt.IsZero()
+}
+
+func (s Schedule) validate(room string) error {
+	opens, admits, closes := s.QueueOpensAt, s.AdmitsAt, s.ClosesAt
+	if !opens.IsZero() && !admits.IsZero() && admits.Before(opens.Time) {
+		return fmt.Errorf("room %q: schedule.admits_at is before queue_opens_at, so the doors would open before the queue does", room)
+	}
+	if !closes.IsZero() && !admits.IsZero() && !closes.After(admits.Time) {
+		return fmt.Errorf("room %q: schedule.closes_at must be after admits_at", room)
+	}
+	if !closes.IsZero() && !opens.IsZero() && !closes.After(opens.Time) {
+		return fmt.Errorf("room %q: schedule.closes_at must be after queue_opens_at", room)
+	}
+	if !opens.IsZero() && admits.IsZero() {
+		return fmt.Errorf("room %q: schedule.queue_opens_at needs admits_at, or the queue would never open", room)
+	}
+	return nil
+}
+
 // Room configures one waiting room: which host it matches, where admitted
 // traffic goes, and its admission limits. A room with an empty MatchHost is
 // the catch-all; at most one is allowed.
@@ -57,6 +115,13 @@ type Room struct {
 	// After ApplyEnvAndDefaults it is never nil; read it through JoinLimit.
 	JoinLimitPerIP  *int     `yaml:"join_limit_per_ip"`
 	JoinLimitWindow Duration `yaml:"join_limit_window"`
+
+	// Schedule opens the room at a fixed time rather than immediately.
+	Schedule Schedule `yaml:"schedule"`
+	// Lottery settles the order of everyone who lined up before the doors open
+	// by drawing rather than by arrival, so turning up early gains nothing.
+	// It has no effect without a schedule.
+	Lottery bool `yaml:"lottery"`
 }
 
 // JoinLimit is the resolved per-address join limit; 0 means no limit.
@@ -277,6 +342,12 @@ func (c *Config) Validate() error {
 		}
 		if r.JoinLimitWindow.Std() <= 0 {
 			return fmt.Errorf("room %q: join_limit_window must be positive", name)
+		}
+		if err := r.Schedule.validate(name); err != nil {
+			return err
+		}
+		if r.Lottery && !r.Schedule.IsSet() {
+			return fmt.Errorf("room %q: lottery needs a schedule; without one there is no window to draw from", name)
 		}
 		if r.MatchHost == "" {
 			catchAlls++
