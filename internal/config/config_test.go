@@ -212,3 +212,123 @@ func TestMissingFile(t *testing.T) {
 		t.Error("want error for missing file")
 	}
 }
+
+func TestScheduleParsing(t *testing.T) {
+	cfg, err := Load(writeConfig(t, `
+cookie_secret: "0123456789abcdef"
+admin_token: "secret"
+trusted_proxies: ["10.0.0.0/8"]
+rooms:
+  drop:
+    origin: http://backend:3000
+    lottery: true
+    schedule:
+      queue_opens_at: 2026-11-20T09:30:00Z
+      admits_at: 2026-11-20T10:00:00Z
+      closes_at: 2026-11-20T12:00:00Z
+`))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	room := cfg.Rooms["drop"]
+	if !room.Lottery {
+		t.Error("lottery was not parsed")
+	}
+	if !room.Schedule.IsSet() {
+		t.Fatal("schedule was not parsed")
+	}
+	if got := room.Schedule.AdmitsAt.UTC().Format(time.RFC3339); got != "2026-11-20T10:00:00Z" {
+		t.Errorf("admits_at = %s", got)
+	}
+	if len(cfg.TrustedProxies) != 1 {
+		t.Errorf("trusted_proxies = %v", cfg.TrustedProxies)
+	}
+}
+
+func TestUnscheduledRoomHasNoSchedule(t *testing.T) {
+	cfg, err := Load(writeConfig(t, validYAML))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Rooms["shop"].Schedule.IsSet() {
+		t.Error("a room with no schedule block reported one")
+	}
+}
+
+func TestScheduleAndLimitValidation(t *testing.T) {
+	base := func(room string) string {
+		return `
+cookie_secret: "0123456789abcdef"
+admin_token: "secret"
+rooms:
+  drop:
+    origin: http://backend:3000
+` + room
+	}
+	cases := []struct{ name, yaml, wantErr string }{
+		{"doors before queue", base(`
+    schedule:
+      queue_opens_at: 2026-11-20T10:00:00Z
+      admits_at: 2026-11-20T09:00:00Z
+`), "before queue_opens_at"},
+		{"closes before admits", base(`
+    schedule:
+      admits_at: 2026-11-20T10:00:00Z
+      closes_at: 2026-11-20T09:00:00Z
+`), "closes_at must be after admits_at"},
+		{"queue opens with no doors", base(`
+    schedule:
+      queue_opens_at: 2026-11-20T10:00:00Z
+`), "needs admits_at"},
+		{"lottery without a schedule", base(`
+    lottery: true
+`), "lottery needs a schedule"},
+		{"unparseable time", base(`
+    schedule:
+      admits_at: "next tuesday"
+`), "RFC 3339"},
+		{"negative join limit", base(`
+    join_limit_per_ip: -5
+`), "cannot be negative"},
+		{"bad trusted proxy", `
+cookie_secret: "0123456789abcdef"
+admin_token: "secret"
+trusted_proxies: ["10.0.0.1"]
+rooms:
+  a: {origin: "http://x:1"}
+`, "not a CIDR"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Load(writeConfig(t, tc.yaml))
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Errorf("want error containing %q, got %v", tc.wantErr, err)
+			}
+		})
+	}
+}
+
+func TestJoinLimitZeroDisablesRatherThanDefaults(t *testing.T) {
+	// An explicit 0 must survive: an operator turning the limit off should not
+	// silently get the default back.
+	cfg, err := Load(writeConfig(t, `
+cookie_secret: "0123456789abcdef"
+admin_token: "secret"
+rooms:
+  off:
+    origin: http://backend:3000
+    join_limit_per_ip: 0
+  unset:
+    origin: http://backend:3000
+    match_host: unset.test
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Rooms["off"].JoinLimit(); got != 0 {
+		t.Errorf("explicit 0 became %d", got)
+	}
+	if got := cfg.Rooms["unset"].JoinLimit(); got != DefaultJoinLimitPerIP {
+		t.Errorf("unset limit = %d, want the default %d", got, DefaultJoinLimitPerIP)
+	}
+}
