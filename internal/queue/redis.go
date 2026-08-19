@@ -71,14 +71,15 @@ func (s *RedisStore) Resolve(ctx context.Context, room, id, bucket string) (Reso
 	if err != nil {
 		return Resolution{}, fmt.Errorf("queue: resolve %s/%s: %w", room, id, err)
 	}
-	if len(raw) != 4 {
-		return Resolution{}, fmt.Errorf("queue: resolve %s: reply had %d parts, want 4", room, len(raw))
+	if len(raw) != 5 {
+		return Resolution{}, fmt.Errorf("queue: resolve %s: reply had %d parts, want 5", room, len(raw))
 	}
 	return Resolution{
 		Admitted: raw[0] == 1,
 		Position: raw[1],
 		Joined:   raw[2] == 1,
 		Refused:  raw[3] == 1,
+		Phase:    Phase(raw[4]),
 	}, nil
 }
 
@@ -133,37 +134,47 @@ func (s *RedisStore) Admit(ctx context.Context, room string) (AdmitResult, error
 }
 
 func (s *RedisStore) Snapshot(ctx context.Context, room string) (Snapshot, error) {
+	now := s.now()
 	raw, err := snapshotScript.Run(ctx, s.rdb,
 		keysFor(room, "waiting", "active", "conf", "stats"),
-		unixSeconds(s.now()),
+		unixMillis(now),
 	).Slice()
 	if err != nil {
 		return Snapshot{}, fmt.Errorf("queue: snapshot %s: %w", room, err)
 	}
-	if len(raw) != 14 {
-		return Snapshot{}, fmt.Errorf("queue: snapshot %s: reply had %d parts, want 14", room, len(raw))
+	if len(raw)%2 != 0 {
+		return Snapshot{}, fmt.Errorf("queue: snapshot %s: reply had %d parts, want field/value pairs", room, len(raw))
 	}
-	f := make([]float64, len(raw))
-	for i, v := range raw {
-		str, _ := v.(string)
-		f[i], _ = strconv.ParseFloat(str, 64)
+	// Field/value pairs rather than a fixed order, so adding a number to the
+	// script cannot silently shift the meaning of the others.
+	num := make(map[string]float64, len(raw)/2)
+	for i := 0; i+1 < len(raw); i += 2 {
+		field, _ := raw[i].(string)
+		value, _ := raw[i+1].(string)
+		num[field], _ = strconv.ParseFloat(value, 64)
 	}
 	return Snapshot{
 		Room:             room,
-		Waiting:          int64(f[0]),
-		Active:           int64(f[1]),
-		Rate:             f[2],
-		MaxActive:        int(f[3]),
-		SessionTTLSecs:   int64(f[4]),
-		AbandonAfterSecs: int64(f[5]),
-		Paused:           f[6] == 1,
-		TotalJoined:      int64(f[7]),
-		TotalAdmitted:    int64(f[8]),
-		TotalExpired:     int64(f[9]),
-		TotalAbandoned:   int64(f[10]),
-		TotalRefused:     int64(f[11]),
-		JoinLimit:        int(f[12]),
-		JoinWindowSecs:   int64(f[13]),
+		Waiting:          int64(num["waiting"]),
+		Active:           int64(num["active"]),
+		Rate:             num["rate"],
+		MaxActive:        int(num["cap"]),
+		SessionTTLSecs:   int64(num["ttl"]),
+		AbandonAfterSecs: int64(num["abandon"]),
+		Paused:           num["paused"] == 1,
+		JoinLimit:        int(num["join_limit"]),
+		JoinWindowSecs:   int64(num["join_window"]),
+		TotalJoined:      int64(num["joined"]),
+		TotalAdmitted:    int64(num["admitted"]),
+		TotalExpired:     int64(num["expired"]),
+		TotalAbandoned:   int64(num["abandoned"]),
+		TotalRefused:     int64(num["refused"]),
+		Phase:            Phase(int(num["phase"])),
+		Lottery:          num["lottery"] == 1,
+		QueueOpensAtMS:   int64(num["opens_ms"]),
+		AdmitsAtMS:       int64(num["admits_ms"]),
+		ClosesAtMS:       int64(num["closes_ms"]),
+		NowMS:            now.UnixMilli(),
 	}, nil
 }
 
@@ -202,6 +213,16 @@ func (s *RedisStore) Seed(ctx context.Context, room string, cfg RoomConfig, over
 	if err := script.Run(ctx, s.rdb, keysFor(room, "conf"), fields...).Err(); err != nil {
 		return fmt.Errorf("queue: seed %s: %w", room, err)
 	}
+
+	// The draw salt is never overwritten, not even by an explicit reseed:
+	// changing it would redraw everyone already collected and move people who
+	// are watching their place on screen.
+	if cfg.DrawSalt != "" {
+		err := seedScript.Run(ctx, s.rdb, keysFor(room, "conf"), "draw_salt", cfg.DrawSalt).Err()
+		if err != nil {
+			return fmt.Errorf("queue: seed salt %s: %w", room, err)
+		}
+	}
 	err := anchorBucketScript.Run(ctx, s.rdb, keysFor(room, "bucket"), unixMillis(s.now())).Err()
 	if err != nil {
 		return fmt.Errorf("queue: seed bucket %s: %w", room, err)
@@ -217,7 +238,19 @@ func confFields(cfg RoomConfig) []any {
 		"abandon_secs", strconv.FormatInt(int64(cfg.AbandonAfter.Seconds()), 10),
 		"join_limit", strconv.Itoa(cfg.JoinLimit),
 		"join_window_secs", strconv.FormatInt(int64(cfg.JoinWindow.Seconds()), 10),
+		"lottery", boolField(cfg.Lottery),
+		"opens_ms", millisField(cfg.QueueOpensAt),
+		"admits_ms", millisField(cfg.AdmitsAt),
+		"closes_ms", millisField(cfg.ClosesAt),
 	}
+}
+
+// millisField renders a schedule time, with the zero time meaning "unset".
+func millisField(t time.Time) string {
+	if t.IsZero() {
+		return "0"
+	}
+	return strconv.FormatInt(t.UnixMilli(), 10)
 }
 
 func boolField(b bool) string {

@@ -21,6 +21,18 @@ type RoomConfig struct {
 	// address per JoinWindow. Zero disables the limit.
 	JoinLimit  int           `json:"join_limit"`
 	JoinWindow time.Duration `json:"-"`
+
+	// Lottery settles the order of everyone collected before the doors open by
+	// drawing rather than by arrival, so turning up early gains nothing.
+	Lottery bool `json:"lottery"`
+	// DrawSalt keeps draw places from being worked out before the room exists.
+	// It is generated once per room and never leaves Redis.
+	DrawSalt string `json:"-"`
+
+	// The schedule. A zero time means unset.
+	QueueOpensAt time.Time `json:"-"`
+	AdmitsAt     time.Time `json:"-"`
+	ClosesAt     time.Time `json:"-"`
 }
 
 // Snapshot is a point-in-time view of one room, used by the admin API and the
@@ -45,6 +57,19 @@ type Snapshot struct {
 	// A climbing number means the limit is too tight for the traffic, so it is
 	// surfaced rather than hidden.
 	TotalRefused int64 `json:"total_refused"`
+
+	// Phase and the schedule behind it, for the countdown on the waiting page
+	// and the timetable on the dashboard.
+	Phase   Phase `json:"phase"`
+	Lottery bool  `json:"lottery"`
+	// Unix milliseconds, 0 when unset, so the browser can count down without
+	// depending on the visitor's own clock being right.
+	QueueOpensAtMS int64 `json:"queue_opens_at_ms"`
+	AdmitsAtMS     int64 `json:"admits_at_ms"`
+	ClosesAtMS     int64 `json:"closes_at_ms"`
+	// NowMS is the server's clock at the moment of the snapshot, so a browser
+	// with a skewed clock still shows the right time remaining.
+	NowMS int64 `json:"now_ms"`
 }
 
 // AdmitResult reports what one admission pass changed. The caller turns each
@@ -62,6 +87,37 @@ func (r AdmitResult) empty() bool {
 	return len(r.Admitted) == 0 && len(r.Expired) == 0 && len(r.Abandoned) == 0
 }
 
+// Phase is where a scheduled room is in its timetable. An unscheduled room is
+// always PhaseQueueing. The values are shared with the Lua scripts.
+type Phase int
+
+const (
+	// PhaseQueueing is the ordinary state: visitors queue and are admitted.
+	PhaseQueueing Phase = 0
+	// PhaseBefore is before the queue itself opens. Nobody is queued yet, so
+	// there is nothing to gain by arriving early.
+	PhaseBefore Phase = 1
+	// PhaseDraw is the window between the queue opening and the doors opening:
+	// visitors are collected but nobody is admitted.
+	PhaseDraw Phase = 2
+	// PhaseClosed is after the room's closing time. Visitors already on the
+	// site keep their sessions; nobody new is admitted.
+	PhaseClosed Phase = 3
+)
+
+func (p Phase) String() string {
+	switch p {
+	case PhaseBefore:
+		return "before"
+	case PhaseDraw:
+		return "draw"
+	case PhaseClosed:
+		return "closed"
+	default:
+		return "queueing"
+	}
+}
+
 // Resolution is what one visitor request resolves to.
 type Resolution struct {
 	// Admitted means the visitor holds a live session and may reach the origin.
@@ -74,6 +130,8 @@ type Resolution struct {
 	// Refused means the visitor's address has entered the queue too many times
 	// in the current window and this attempt was turned away.
 	Refused bool
+	// Phase is the room's place in its schedule at the moment of the request.
+	Phase Phase
 }
 
 // Store is the queue state. Every method is scoped to a room; rooms never
