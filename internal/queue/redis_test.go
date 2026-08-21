@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -331,6 +332,233 @@ func TestJoinLimitDisabledByZero(t *testing.T) {
 		if res := f.resolveFrom(fmt.Sprintf("v%d", i), "198.51.100.4"); res.Refused {
 			t.Fatalf("visitor %d was refused though the limit is disabled", i)
 		}
+	}
+}
+
+// seedScheduled configures a room whose doors open at admitsAt, collecting
+// visitors from opensAt onwards.
+func (f *fixture) seedScheduled(opensAt, admitsAt, closesAt time.Time, lottery bool) {
+	f.t.Helper()
+	// Sessions and heartbeats outlast the schedule being tested, so that
+	// jumping the clock across a window does not expire or abandon anyone;
+	// those behaviours have their own tests.
+	cfg := RoomConfig{
+		Rate: 100, MaxActive: 1000, SessionTTL: time.Hour, AbandonAfter: 24 * time.Hour,
+		Lottery: lottery, DrawSalt: "test-salt",
+		QueueOpensAt: opensAt, AdmitsAt: admitsAt, ClosesAt: closesAt,
+	}
+	if err := f.store.Seed(f.ctx, testRoom, cfg, true); err != nil {
+		f.t.Fatalf("seed: %v", err)
+	}
+}
+
+func TestScheduleHoldsVisitorsBeforeTheQueueOpens(t *testing.T) {
+	f := newFixture(t)
+	opens := f.clock.Add(10 * time.Minute)
+	f.seedScheduled(opens, opens.Add(30*time.Minute), time.Time{}, true)
+
+	res := f.resolve("early-bird")
+	if res.Phase != PhaseBefore {
+		t.Errorf("phase = %v, want before", res.Phase)
+	}
+	if res.Joined || res.Position != 0 {
+		t.Errorf("a visitor was queued before the queue opened: %+v", res)
+	}
+	if snap := f.snapshot(); snap.Waiting != 0 {
+		t.Errorf("waiting = %d before opening, want 0", snap.Waiting)
+	}
+}
+
+func TestScheduleCollectsDuringTheDrawThenAdmits(t *testing.T) {
+	f := newFixture(t)
+	opens := f.clock
+	admits := f.clock.Add(30 * time.Minute)
+	f.seedScheduled(opens, admits, time.Time{}, true)
+
+	for i := range 5 {
+		res := f.resolve(fmt.Sprintf("v%d", i))
+		if res.Phase != PhaseDraw {
+			t.Fatalf("phase = %v, want draw", res.Phase)
+		}
+		if !res.Joined {
+			t.Fatalf("visitor %d was not collected", i)
+		}
+	}
+	// Collected, but the doors are shut.
+	f.advance(time.Minute)
+	if got := f.admit(); len(got.Admitted) != 0 {
+		t.Errorf("admitted %d during the draw window, want 0", len(got.Admitted))
+	}
+	if snap := f.snapshot(); snap.Waiting != 5 || snap.Phase != PhaseDraw {
+		t.Errorf("waiting=%d phase=%v, want 5 and draw", snap.Waiting, snap.Phase)
+	}
+
+	// Doors open.
+	f.advance(30 * time.Minute)
+	if got := f.admit(); len(got.Admitted) != 5 {
+		t.Errorf("admitted %d after the doors opened, want 5", len(got.Admitted))
+	}
+	if snap := f.snapshot(); snap.Phase != PhaseQueueing {
+		t.Errorf("phase = %v after opening, want queueing", snap.Phase)
+	}
+}
+
+func TestScheduleStopsAdmittingAfterClosing(t *testing.T) {
+	f := newFixture(t)
+	closes := f.clock.Add(10 * time.Minute)
+	f.seedScheduled(time.Time{}, time.Time{}, closes, false)
+
+	f.resolve("a")
+	f.advance(time.Second)
+	if got := f.admit(); len(got.Admitted) != 1 {
+		t.Fatalf("admitted %d before closing, want 1", len(got.Admitted))
+	}
+
+	f.advance(11 * time.Minute)
+	f.resolve("b")
+	if got := f.admit(); len(got.Admitted) != 0 {
+		t.Errorf("admitted %d after closing, want 0", len(got.Admitted))
+	}
+	if res := f.resolve("c"); res.Phase != PhaseClosed || res.Joined {
+		t.Errorf("a closed room still queued a visitor: %+v", res)
+	}
+}
+
+func TestClosingDoesNotEvictVisitorsAlreadyOnTheSite(t *testing.T) {
+	// Closing means no new admissions, not throwing people out mid-purchase.
+	f := newFixture(t)
+	closes := f.clock.Add(10 * time.Minute)
+	f.seedScheduled(time.Time{}, time.Time{}, closes, false)
+
+	f.resolve("shopper")
+	f.advance(time.Second)
+	f.admit()
+
+	f.advance(11 * time.Minute)
+	if res := f.resolve("shopper"); !res.Admitted {
+		t.Errorf("an admitted visitor lost their session when the room closed: %+v", res)
+	}
+}
+
+func TestLotteryPlaceSurvivesRejoining(t *testing.T) {
+	// The property that makes the draw worth having: leaving and coming back
+	// must not reroll your place, or a bot would do it continuously until it
+	// drew a good one.
+	f := newFixture(t)
+	f.seedScheduled(f.clock, f.clock.Add(time.Hour), time.Time{}, true)
+
+	for i := range 20 {
+		f.resolve(fmt.Sprintf("other%d", i))
+	}
+	first := f.resolve("roller").Position
+
+	for range 10 {
+		// Abandon and come back.
+		if _, err := f.store.Flush(f.ctx, testRoom); err == nil {
+			// Flush clears everyone, so rebuild the same crowd to compare
+			// against the same field.
+			for i := range 20 {
+				f.resolve(fmt.Sprintf("other%d", i))
+			}
+		}
+		if got := f.resolve("roller").Position; got != first {
+			t.Fatalf("rejoining moved the visitor from %d to %d", first, got)
+		}
+	}
+}
+
+func TestLotteryOrderIgnoresArrivalOrder(t *testing.T) {
+	// If the draw simply preserved arrival order it would reward camping.
+	f := newFixture(t)
+	f.seedScheduled(f.clock, f.clock.Add(time.Hour), time.Time{}, true)
+
+	const n = 60
+	var arrival []string
+	for i := range n {
+		id := fmt.Sprintf("visitor-%02d", i)
+		arrival = append(arrival, id)
+		f.resolve(id)
+	}
+
+	f.advance(time.Hour + time.Minute)
+	admitted := f.admit().Admitted
+	if len(admitted) != n {
+		t.Fatalf("admitted %d, want %d", len(admitted), n)
+	}
+	if slices.Equal(admitted, arrival) {
+		t.Error("the draw handed back arrival order, so arriving early still pays")
+	}
+
+	// Everyone still gets in exactly once.
+	seen := map[string]bool{}
+	for _, id := range admitted {
+		if seen[id] {
+			t.Fatalf("%s was admitted twice", id)
+		}
+		seen[id] = true
+	}
+	if len(seen) != n {
+		t.Errorf("%d distinct visitors admitted, want %d", len(seen), n)
+	}
+}
+
+func TestLotteryEntriesGoBeforeLaterArrivals(t *testing.T) {
+	// Draw places sit in [0,1) and later arrivals get sequence numbers from 1
+	// up, so everyone in the draw is served before anyone who turned up after
+	// the doors opened.
+	f := newFixture(t)
+	admits := f.clock.Add(30 * time.Minute)
+	f.seedScheduled(f.clock, admits, time.Time{}, true)
+
+	for i := range 10 {
+		f.resolve(fmt.Sprintf("draw-%d", i))
+	}
+	f.advance(31 * time.Minute)
+	for i := range 5 {
+		f.resolve(fmt.Sprintf("late-%d", i))
+	}
+
+	admitted := f.admit().Admitted
+	if len(admitted) != 15 {
+		t.Fatalf("admitted %d, want 15", len(admitted))
+	}
+	for i, id := range admitted[:10] {
+		if !strings.HasPrefix(id, "draw-") {
+			t.Errorf("position %d went to %q, want a draw entry", i+1, id)
+		}
+	}
+	for i, id := range admitted[10:] {
+		if !strings.HasPrefix(id, "late-") {
+			t.Errorf("position %d went to %q, want a late arrival", i+11, id)
+		}
+	}
+}
+
+func TestLotteryOffKeepsArrivalOrder(t *testing.T) {
+	// A scheduled room without the draw is still plain FIFO.
+	f := newFixture(t)
+	f.seedScheduled(f.clock, f.clock.Add(30*time.Minute), time.Time{}, false)
+
+	var ids []string
+	for i := range 8 {
+		id := fmt.Sprintf("v%d", i)
+		ids = append(ids, id)
+		f.resolve(id)
+	}
+	f.advance(31 * time.Minute)
+	if got := f.admit().Admitted; !slices.Equal(got, ids) {
+		t.Errorf("admitted %v, want arrival order %v", got, ids)
+	}
+}
+
+func TestUnscheduledRoomIsAlwaysQueueing(t *testing.T) {
+	f := newFixture(t)
+	f.seed(1, 10, time.Minute, time.Hour)
+	if res := f.resolve("a"); res.Phase != PhaseQueueing {
+		t.Errorf("phase = %v, want queueing", res.Phase)
+	}
+	if snap := f.snapshot(); snap.Phase != PhaseQueueing {
+		t.Errorf("snapshot phase = %v, want queueing", snap.Phase)
 	}
 }
 
