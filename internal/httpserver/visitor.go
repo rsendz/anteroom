@@ -109,6 +109,16 @@ type waitingPage struct {
 	Degraded   bool
 	// ETAText is ETASeconds phrased the way a person would say it.
 	ETAText string
+	// Phase drives which face the page shows: the ordinary queue, or a draw
+	// counting down to the doors opening.
+	Phase   string
+	Lottery bool
+	// Milliseconds since the epoch, with the server's own clock alongside, so
+	// the countdown is right even on a device whose clock is not.
+	OpensAtMS  int64
+	AdmitsAtMS int64
+	ClosesAtMS int64
+	NowMS      int64
 	// RefreshSeconds drives the no-JavaScript fallback.
 	RefreshSeconds int
 	EventsPath     string
@@ -137,9 +147,21 @@ func (s *Server) renderWaiting(w http.ResponseWriter, r *http.Request, name stri
 		Scripts:        s.assets.scriptsFor("queue"),
 		Styles:         s.assets.stylesFor("queue"),
 		PlainRefresh:   !s.assets.built("queue"),
+		Phase:          res.Phase.String(),
+		Lottery:        snap.Lottery,
+		OpensAtMS:      snap.QueueOpensAtMS,
+		AdmitsAtMS:     snap.AdmitsAtMS,
+		ClosesAtMS:     snap.ClosesAtMS,
+		NowMS:          time.Now().UnixMilli(),
 	}
 	if page.Title == "" {
 		page.Title = name
+	}
+	// Before the doors open there is no line to be in, so the entrant count is
+	// what the page shows instead of a position.
+	if res.Phase == queue.PhaseDraw || res.Phase == queue.PhaseBefore {
+		page.Position = 0
+		page.Waiting = snap.Waiting
 	}
 
 	// The waiting page is per-visitor and changes every few seconds, so it

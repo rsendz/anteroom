@@ -6,15 +6,21 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/luisresendez/anteroom/internal/queue"
 	"github.com/luisresendez/anteroom/internal/token"
 )
 
 // positionUpdate is the payload the waiting page renders from.
 type positionUpdate struct {
-	Position   int64 `json:"position"`
-	Waiting    int64 `json:"waiting"`
-	ETASeconds int64 `json:"eta_secs"`
-	Paused     bool  `json:"paused"`
+	Position   int64  `json:"position"`
+	Waiting    int64  `json:"waiting"`
+	ETASeconds int64  `json:"eta_secs"`
+	Paused     bool   `json:"paused"`
+	Phase      string `json:"phase"`
+	// AdmitsAtMS and NowMS let the page count down against the server's clock
+	// rather than the visitor's.
+	AdmitsAtMS int64 `json:"admits_at_ms,omitempty"`
+	NowMS      int64 `json:"now_ms"`
 }
 
 // handleEvents streams a waiting visitor their position until they are
@@ -85,6 +91,16 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 				Waiting:    waitingTotal(snap.Waiting, res.Position),
 				ETASeconds: etaSeconds(res.Position, snap),
 				Paused:     snap.Paused,
+				Phase:      res.Phase.String(),
+				AdmitsAtMS: snap.AdmitsAtMS,
+				NowMS:      time.Now().UnixMilli(),
+			}
+			// Nobody has a place until the doors open, so the page shows the
+			// number of entrants and a countdown rather than a position.
+			if res.Phase == queue.PhaseDraw || res.Phase == queue.PhaseBefore {
+				update.Position = 0
+				update.Waiting = snap.Waiting
+				update.ETASeconds = 0
 			}
 			if !writeEvent(w, rc, "position", update) {
 				return

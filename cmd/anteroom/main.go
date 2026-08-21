@@ -225,6 +225,12 @@ func waitForRedis(ctx context.Context, rdb *redis.Client, log *slog.Logger) erro
 // silently undone by a restart.
 func seedRooms(ctx context.Context, store queue.Store, cfg config.Config, reseed bool, log *slog.Logger) error {
 	for name, room := range cfg.Rooms {
+		// A fresh salt is offered every start, but seeding keeps the first one
+		// forever: changing it would redraw a room mid-draw.
+		salt, err := randomHex(16)
+		if err != nil {
+			return err
+		}
 		want := queue.RoomConfig{
 			Rate:         room.Rate,
 			MaxActive:    room.MaxActive,
@@ -232,6 +238,11 @@ func seedRooms(ctx context.Context, store queue.Store, cfg config.Config, reseed
 			AbandonAfter: room.AbandonAfter.Std(),
 			JoinLimit:    room.JoinLimit(),
 			JoinWindow:   room.JoinLimitWindow.Std(),
+			Lottery:      room.Lottery,
+			DrawSalt:     salt,
+			QueueOpensAt: room.Schedule.QueueOpensAt.Time,
+			AdmitsAt:     room.Schedule.AdmitsAt.Time,
+			ClosesAt:     room.Schedule.ClosesAt.Time,
 		}
 		if err := store.Seed(ctx, name, want, reseed); err != nil {
 			return err
@@ -240,14 +251,21 @@ func seedRooms(ctx context.Context, store queue.Store, cfg config.Config, reseed
 		if err != nil {
 			return err
 		}
-		log.Info("anteroom: room ready",
+		attrs := []any{
 			"room", name,
 			"host", hostLabel(room.MatchHost),
 			"origin", room.Origin,
 			"rate", snap.Rate,
 			"max_active", snap.MaxActive,
 			"waiting", snap.Waiting,
-		)
+		}
+		if room.Schedule.IsSet() {
+			attrs = append(attrs, "phase", snap.Phase.String(), "lottery", snap.Lottery)
+			if !room.Schedule.AdmitsAt.IsZero() {
+				attrs = append(attrs, "admits_at", room.Schedule.AdmitsAt.Format(time.RFC3339))
+			}
+		}
+		log.Info("anteroom: room ready", attrs...)
 		if snap.Rate != room.Rate || snap.MaxActive != room.MaxActive {
 			log.Warn("anteroom: live settings differ from the config file; run with --reseed to replace them",
 				"room", name,
