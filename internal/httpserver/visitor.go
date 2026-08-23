@@ -62,14 +62,24 @@ func (s *Server) handleVisitor(w http.ResponseWriter, r *http.Request) {
 		if r.Context().Err() != nil {
 			return // the visitor went away mid-request
 		}
+		s.health.observe(true)
+
 		// Without the queue there is no safe way to know who may pass, and
 		// waving everyone through would hand the origin exactly the spike
-		// anteroom exists to prevent. Hold visitors on the waiting page
-		// instead, where they will be let in as soon as Redis is back.
+		// anteroom exists to prevent. Visitors are held by default, and let
+		// through only if the operator asked for that and the outage has
+		// outlasted the grace period.
+		if failingOpen := s.health.shouldFailOpen(); failingOpen {
+			s.announceFailOpen(roomName, true)
+			s.proxies[roomName].ServeHTTP(w, r)
+			return
+		}
 		s.log.Error("anteroom: queue unavailable", "room", roomName, "err", err)
 		s.renderWaiting(w, r, roomName, room, v, queue.Resolution{}, http.StatusServiceUnavailable)
 		return
 	}
+	s.health.observe(false)
+	s.announceFailOpen(roomName, false)
 
 	if res.Admitted {
 		if v.status != token.StatusAdmitted {

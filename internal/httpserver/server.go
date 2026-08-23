@@ -44,6 +44,7 @@ type Server struct {
 	stats      *statsCache
 	assets     assets
 	ipResolver *clientIPResolver
+	health     *queueHealth
 	// lastProxyWarning rate-limits the untrusted-proxy warning (unix seconds).
 	lastProxyWarning atomic.Int64
 
@@ -72,6 +73,7 @@ func New(cfg config.Config, store queue.Store, emitter events.Emitter, log *slog
 		stats:       newStatsCache(store, cfg, log),
 		assets:      loadAssets(webFS, log),
 		ipResolver:  ipResolver,
+		health:      newQueueHealth(cfg.FailOpen, cfg.FailOpenAfter.Std()),
 		sseInterval: 2 * time.Second,
 	}
 	for name, room := range cfg.Rooms {

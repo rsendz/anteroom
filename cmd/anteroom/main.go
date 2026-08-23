@@ -57,6 +57,7 @@ func run(args []string) error {
 		maxActive  = fs.Int("max-active", config.DefaultMaxActive, "visitors allowed on the site at once (single-room mode)")
 		listen     = fs.String("listen", "", "address to listen on (overrides the config file)")
 		reseed     = fs.Bool("reseed", false, "overwrite live room settings with the ones in the config file")
+		failOpen   = fs.Bool("fail-open", false, "let visitors through unchecked if the queue store stays unreachable")
 		verbose    = fs.Bool("v", false, "log every admission pass")
 	)
 	if err := fs.Parse(args); err != nil {
@@ -75,6 +76,14 @@ func run(args []string) error {
 	}
 	if *listen != "" {
 		cfg.Listen = *listen
+	}
+	if *failOpen {
+		cfg.FailOpen = true
+	}
+	if cfg.FailOpen {
+		log.Warn("anteroom: fail-open is on; if the queue store stays unreachable, "+
+			"visitors will be let through and the origin will be unprotected",
+			"after", cfg.FailOpenAfter.Std())
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

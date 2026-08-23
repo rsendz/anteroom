@@ -15,6 +15,11 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 	api := Prefix + "admin/api/"
 	guard := s.requireAdmin
 
+	// Answerable without touching Redis, because the queue store being
+	// unreachable is exactly when someone will be looking at this.
+	mux.Handle("GET "+api+"status", guard(func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, s.health.status())
+	}))
 	mux.Handle("GET "+api+"rooms", guard(s.handleListRooms))
 	mux.Handle("GET "+api+"rooms/{room}/stats", guard(s.handleRoomStats))
 	mux.Handle("PUT "+api+"rooms/{room}/config", guard(s.handleSetConfig))
