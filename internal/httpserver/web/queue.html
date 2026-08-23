@@ -18,7 +18,11 @@
       data-waiting="{{.Waiting}}"
       data-eta="{{.ETASeconds}}"
       data-paused="{{if .Paused}}1{{else}}0{{end}}"
-      data-degraded="{{if .Degraded}}1{{else}}0{{end}}">
+      data-degraded="{{if .Degraded}}1{{else}}0{{end}}"
+      data-phase="{{.Phase}}"
+      data-lottery="{{if .Lottery}}1{{else}}0{{end}}"
+      data-admits-at="{{.AdmitsAtMS}}"
+      data-now="{{.NowMS}}">
 
   <p class="sign">
     <span class="sign__rule"></span>
@@ -30,7 +34,28 @@
   <h1 class="room-title">{{.Title}}</h1>
   {{if .Message}}<p class="room-message">{{.Message}}</p>{{end}}
 
-  <p class="board-label">Your position</p>
+  {{if or (eq .Phase "draw") (eq .Phase "before")}}
+  <!-- Before the doors open nobody has a place, so the page shows how long is
+       left and how many are in rather than a position that would only reward
+       whoever refreshed earliest. -->
+  <p class="board-label" data-role="board-label">
+    {{if eq .Phase "before"}}The queue opens in{{else}}Doors open in{{end}}
+  </p>
+  <p class="countdown" data-role="countdown">&#8212;</p>
+
+  <p class="eta" data-role="eta">
+    {{if .Waiting}}{{.Waiting}} already in{{end}}
+  </p>
+
+  <p class="reassurance">
+    {{if .Lottery}}Everyone waiting now goes into a draw for their place in
+    line, so arriving early doesn't improve your chances. Keep this page open
+    and it will take you through when the doors open.
+    {{else}}Keep this page open. You'll go through automatically when the
+    doors open — there's no need to reload.{{end}}
+  </p>
+  {{else}}
+  <p class="board-label" data-role="board-label">Your position</p>
   <!-- The number is rendered here too, so a visitor whose scripts never
        arrive still sees where they stand. The board replaces it on load. -->
   <div class="board" data-role="board">
@@ -38,16 +63,20 @@
   </div>
 
   <p class="eta" data-role="eta">
-    {{if .Paused}}Admissions are paused. You keep your place.
+    {{if eq .Phase "closed"}}This room has closed.
+    {{else if .Paused}}Admissions are paused. You keep your place.
     {{else if eq .Position 1}}You're next.
     {{else if .ETASeconds}}About {{.ETAText}} to go.
     {{else}}Working out how long this will take.{{end}}
   </p>
 
   <p class="reassurance">
-    Your place is held. Leave this page open and you'll go through
-    automatically — there's no need to reload.
+    {{if eq .Phase "closed"}}Nobody new is being let in. If you were already
+    on the site, your session is still yours.
+    {{else}}Your place is held. Leave this page open and you'll go through
+    automatically — there's no need to reload.{{end}}
   </p>
+  {{end}}
 
   <p class="notice" data-role="notice" {{if not .Degraded}}hidden{{end}}>
     We can't reach the queue right now. Your place is held — this page keeps trying.
@@ -56,7 +85,7 @@
   <p class="status-bar">
     <span class="connection" data-role="connection" data-state="reconnecting">Connecting</span>
     <span class="status-bar__divider">&#183;</span>
-    <span data-role="waiting">{{if .Waiting}}{{.Waiting}} waiting{{end}}</span>
+    <span data-role="waiting">{{if and .Waiting (eq .Phase "queueing")}}{{.Waiting}} waiting{{end}}</span>
   </p>
 </main>
 {{range .Scripts}}<script type="module" src="{{.}}"></script>

@@ -7,13 +7,20 @@
  * the traffic anteroom exists to absorb.
  */
 import { FlapBoard } from "./flap";
+import { Countdown } from "./countdown";
 import "./queue.css";
+
+/** Where a scheduled room is in its timetable; mirrors queue.Phase in Go. */
+type Phase = "queueing" | "before" | "draw" | "closed";
 
 type Update = {
   position: number;
   waiting: number;
   eta_secs: number;
   paused: boolean;
+  phase: Phase;
+  admits_at_ms?: number;
+  now_ms: number;
 };
 
 type Connection = "live" | "reconnecting";
@@ -24,7 +31,10 @@ function main(): void {
   const root = document.getElementById("anteroom");
   if (!root) return;
 
-  const boardEl = requireEl(root, "[data-role='board']");
+  // The board and countdown are alternatives: a scheduled room that has not
+  // opened shows time remaining, and only becomes a queue once it has.
+  const boardEl = root.querySelector<HTMLElement>("[data-role='board']");
+  const countdownEl = root.querySelector<HTMLElement>("[data-role='countdown']");
   const etaEl = requireEl(root, "[data-role='eta']");
   const waitingEl = requireEl(root, "[data-role='waiting']");
   const connectionEl = requireEl(root, "[data-role='connection']");
@@ -32,18 +42,34 @@ function main(): void {
 
   const eventsPath = root.dataset.events ?? "/__anteroom/events";
   const refreshSeconds = Number(root.dataset.refresh ?? "10");
+  const isLottery = root.dataset.lottery === "1";
 
-  const board = new FlapBoard(boardEl);
+  const board = boardEl ? new FlapBoard(boardEl) : null;
+  const countdown = countdownEl
+    ? new Countdown(countdownEl, () => {
+        // The doors are due. Reload rather than guess: the server decides
+        // whether the room has really opened.
+        window.setTimeout(() => window.location.reload(), 1500);
+      })
+    : null;
+
+  let phase: Phase = (root.dataset.phase as Phase) ?? "queueing";
   const initial: Update = {
     position: Number(root.dataset.position ?? "0"),
     waiting: Number(root.dataset.waiting ?? "0"),
     eta_secs: Number(root.dataset.eta ?? "0"),
     paused: root.dataset.paused === "1",
+    phase,
+    admits_at_ms: Number(root.dataset.admitsAt ?? "0"),
+    now_ms: Number(root.dataset.now ?? "0") || Date.now(),
   };
 
+  if (countdown && initial.admits_at_ms) {
+    countdown.set(initial.admits_at_ms, initial.now_ms);
+  }
   // The server already rendered the first position; show it without a flip so
   // the page does not appear to change the moment it loads.
-  if (initial.position > 0) {
+  if (board && initial.position > 0) {
     board.set(initial.position, false);
     render(initial);
   }
@@ -52,9 +78,28 @@ function main(): void {
   }
 
   function render(update: Update): void {
-    if (update.position > 0) board.set(update.position);
+    // Crossing out of a scheduled window changes the whole shape of the page,
+    // so let the server render the new one rather than rebuilding it here.
+    if (update.phase !== phase) {
+      phase = update.phase;
+      window.location.reload();
+      return;
+    }
 
-    if (update.paused) {
+    if (phase === "before" || phase === "draw") {
+      if (countdown && update.admits_at_ms) {
+        countdown.set(update.admits_at_ms, update.now_ms);
+      }
+      etaEl.textContent = update.waiting > 0 ? `${format(update.waiting)} already in` : "";
+      waitingEl.textContent = isLottery ? "In the draw" : "Waiting to open";
+      return;
+    }
+
+    if (board && update.position > 0) board.set(update.position);
+
+    if (phase === "closed") {
+      etaEl.textContent = "This room has closed.";
+    } else if (update.paused) {
       etaEl.textContent = "Admissions are paused. You keep your place.";
     } else if (update.position === 1) {
       etaEl.textContent = "You're next.";
@@ -112,9 +157,10 @@ function main(): void {
   source.addEventListener("admitted", () => {
     source.close();
     cancelReload();
+    countdown?.stop();
     setConnection("live");
     etaEl.textContent = "You're in. Taking you through…";
-    boardEl.classList.add("board--through");
+    boardEl?.classList.add("board--through");
     // A short beat so the message registers before the page changes.
     window.setTimeout(() => window.location.reload(), 600);
   });

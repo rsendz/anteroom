@@ -208,6 +208,21 @@ body {
   transform: rotateX(0deg);
 }
 
+/* --- Countdown ---------------------------------------------------------- */
+
+/* Shown instead of the board while a scheduled room is still shut: there is
+   no position to display yet, and inventing one would reward refreshing. */
+.countdown {
+  margin: 0;
+  font-family: var(--board);
+  font-size: clamp(2.75rem, 15vw, 4rem);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--bone);
+  line-height: 1.1;
+}
+
 /* --- Status ------------------------------------------------------------- */
 
 .eta {
