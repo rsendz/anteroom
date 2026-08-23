@@ -14,6 +14,10 @@ const (
 	TypeVisitorAbandoned = "visitor_abandoned"
 	TypeSessionExpired   = "session_expired"
 	TypeConfigChanged    = "config_changed"
+	// TypeFailingOpen and TypeFailOpenEnded bracket a period where the queue
+	// store was unreachable and anteroom let visitors past unchecked.
+	TypeFailingOpen   = "failing_open"
+	TypeFailOpenEnded = "fail_open_ended"
 )
 
 // Event is one thing that happened in a room.

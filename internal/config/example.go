@@ -33,6 +33,14 @@ trusted_proxies: []
 # How often admissions are considered. The default is fine.
 admit_interval: 250ms
 
+# If the queue store is unreachable, anteroom holds visitors on the waiting
+# page and admits nobody. Turning this on lets them through instead, once the
+# outage has lasted fail_open_after -- trading your origin's protection for
+# the site staying up. It is off by default because a waiting room that
+# quietly stops queueing is not a waiting room.
+fail_open: false
+fail_open_after: 30s
+
 redis:
   addr: "localhost:6379"
 
@@ -86,4 +94,19 @@ rooms:
     # Forward the visitor's Host header to the origin instead of the origin's
     # own. Turn this on for a backend that serves several virtual hosts.
     preserve_host: false
+
+    # Open the room at a fixed time, for a sale or a drop. Times are RFC 3339.
+    # Before queue_opens_at nobody is queued at all; between it and admits_at
+    # visitors are collected but nobody is let in; after closes_at there are no
+    # new admissions, though visitors already on the site keep their sessions.
+    # schedule:
+    #   queue_opens_at: 2026-11-20T09:30:00Z
+    #   admits_at:      2026-11-20T10:00:00Z
+    #   closes_at:      2026-11-20T12:00:00Z
+
+    # With a schedule, draw for places among everyone collected before the
+    # doors open rather than ordering them by arrival, so turning up early
+    # gains nothing. A visitor's place comes from who they are, so leaving and
+    # rejoining does not reroll it.
+    # lottery: true
 `

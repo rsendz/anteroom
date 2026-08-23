@@ -150,10 +150,16 @@ type Config struct {
 	// TrustedProxies lists the CIDRs anteroom sits behind. X-Forwarded-For is
 	// honoured only on requests arriving from these, because the header is
 	// otherwise trivially forged and per-address limits would mean nothing.
-	TrustedProxies []string        `yaml:"trusted_proxies"`
-	Redis          Redis           `yaml:"redis"`
-	Kafka          Kafka           `yaml:"kafka"`
-	Rooms          map[string]Room `yaml:"rooms"`
+	TrustedProxies []string `yaml:"trusted_proxies"`
+	// FailOpen lets visitors straight through when the queue store has been
+	// unreachable for FailOpenAfter, trading the origin's protection for the
+	// site staying up. Off by default: failing open silently is how a waiting
+	// room stops being one.
+	FailOpen      bool            `yaml:"fail_open"`
+	FailOpenAfter Duration        `yaml:"fail_open_after"`
+	Redis         Redis           `yaml:"redis"`
+	Kafka         Kafka           `yaml:"kafka"`
+	Rooms         map[string]Room `yaml:"rooms"`
 }
 
 // Room defaults applied to zero-valued fields.
@@ -170,6 +176,11 @@ const (
 	// refused counter on the room snapshot is the signal to raise it.
 	DefaultJoinLimitPerIP  = 120
 	DefaultJoinLimitWindow = time.Minute
+
+	// DefaultFailOpenAfter is long enough that a blip or a failover does not
+	// release the queue, short enough that a real outage does not keep a site
+	// dark for long.
+	DefaultFailOpenAfter = 30 * time.Second
 )
 
 // Default returns a Config with server-level defaults; it has no rooms.
@@ -179,6 +190,7 @@ func Default() Config {
 		AdmitInterval: Duration(250 * time.Millisecond),
 		Redis:         Redis{Addr: "localhost:6379"},
 		Kafka:         Kafka{Topic: "anteroom.events"},
+		FailOpenAfter: Duration(DefaultFailOpenAfter),
 		Rooms:         map[string]Room{},
 	}
 }
@@ -227,6 +239,9 @@ func (c *Config) ApplyEnvAndDefaults() error {
 	if err := c.applyEnv(); err != nil {
 		return err
 	}
+	if c.FailOpenAfter <= 0 {
+		c.FailOpenAfter = Duration(DefaultFailOpenAfter)
+	}
 	c.applyRoomDefaults()
 	return nil
 }
@@ -260,6 +275,16 @@ func (c *Config) applyEnv() error {
 	set("SECURE_COOKIES", func(v string) error {
 		b, err := strconv.ParseBool(v)
 		c.SecureCookies = b
+		return err
+	})
+	set("FAIL_OPEN", func(v string) error {
+		b, err := strconv.ParseBool(v)
+		c.FailOpen = b
+		return err
+	})
+	set("FAIL_OPEN_AFTER", func(v string) error {
+		d, err := time.ParseDuration(v)
+		c.FailOpenAfter = Duration(d)
 		return err
 	})
 	set("ADMIT_INTERVAL", func(v string) error {
