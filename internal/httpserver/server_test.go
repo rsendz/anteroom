@@ -132,6 +132,12 @@ func (f *fakeStore) setResolution(id string, res queue.Resolution) {
 	f.resolution[id] = res
 }
 
+func (f *fakeStore) setSnapshotErr(err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.snapshotErr = err
+}
+
 func (f *fakeStore) setResolveErr(err error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -164,6 +170,7 @@ func (r *recorder) events() []events.Event {
 // harness is a running anteroom in front of a stub origin.
 type harness struct {
 	t          *testing.T
+	srv        *Server
 	server     *httptest.Server
 	origin     *httptest.Server
 	store      *fakeStore
@@ -182,6 +189,13 @@ func newHarness(t *testing.T, rooms map[string]config.Room) *harness {
 // trusting it is how a test controls the apparent client address, which is
 // also exactly how anteroom runs behind a load balancer.
 func newHarnessWith(t *testing.T, rooms map[string]config.Room, trustedProxies []string) *harness {
+	t.Helper()
+	return newHarnessOpts(t, rooms, trustedProxies, func(*config.Config) {})
+}
+
+// newHarnessOpts lets a test adjust the configuration before the server is
+// built, for settings that cannot be changed afterwards.
+func newHarnessOpts(t *testing.T, rooms map[string]config.Room, trustedProxies []string, tweak func(*config.Config)) *harness {
 	t.Helper()
 
 	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -206,6 +220,7 @@ func newHarnessWith(t *testing.T, rooms map[string]config.Room, trustedProxies [
 	cfg.AdminToken = adminToken
 	cfg.Rooms = rooms
 	cfg.TrustedProxies = trustedProxies
+	tweak(&cfg)
 	if err := cfg.ApplyEnvAndDefaults(); err != nil {
 		t.Fatal(err)
 	}
@@ -228,7 +243,7 @@ func newHarnessWith(t *testing.T, rooms map[string]config.Room, trustedProxies [
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 
-	return &harness{t: t, server: ts, origin: origin, store: store, emitter: rec, signer: token.New(testSecret)}
+	return &harness{t: t, srv: srv, server: ts, origin: origin, store: store, emitter: rec, signer: token.New(testSecret)}
 }
 
 // get issues a request without following redirects, so cookies and statuses
