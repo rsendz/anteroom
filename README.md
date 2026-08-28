@@ -72,6 +72,46 @@ who closes the tab stops sending it, and after `abandon_after` they're dropped
 from the queue so they aren't holding up the people behind them. If they come
 back, they rejoin at the end.
 
+**Bot resistance.** Each address may add only so many visitors to the queue per
+minute (`join_limit_per_ip`, 120 by default), which stops a script taking
+thousands of places. Anyone over the limit gets a 429. Keep it generous —
+office and mobile networks put many real people behind one address — and watch
+`total_refused` on the dashboard, which is the signal that it's too tight.
+
+If anteroom runs behind a load balancer you **must** list it in
+`trusted_proxies`, or `X-Forwarded-For` is ignored, every visitor looks like
+the balancer, and they all share one budget. See
+[docs/production.md](docs/production.md).
+
+## Scheduled drops
+
+For a sale that starts at a fixed time, a room can open on a schedule:
+
+```yaml
+rooms:
+  tickets:
+    origin: http://tickets-app:4000
+    lottery: true
+    schedule:
+      queue_opens_at: 2026-11-20T09:30:00Z   # people may start lining up
+      admits_at:      2026-11-20T10:00:00Z   # doors open
+      closes_at:      2026-11-20T12:00:00Z   # optional
+```
+
+Before `queue_opens_at` nobody is queued at all. Between then and `admits_at`
+visitors are collected but nobody is let in. After `closes_at` no new
+admissions happen, though visitors already on the site keep their sessions.
+
+With `lottery: true`, everyone collected before the doors open gets a place
+drawn from their identity rather than their arrival time, **so turning up early
+gains nothing**. The place is derived by hashing, not randomly assigned, which
+means leaving and rejoining lands on the same number — there's no point
+rerolling. Anyone arriving after the doors open queues behind the whole draw.
+
+During the draw the page shows a countdown and how many have entered, not a
+position: a position would either shuffle as others join (which reads as
+broken) or reward whoever refreshed earliest.
+
 ## Rooms
 
 One anteroom can protect several sites, chosen by hostname:
@@ -125,6 +165,7 @@ All endpoints need `Authorization: Bearer <admin_token>`.
 
 | Method | Path | Does |
 | --- | --- | --- |
+| `GET` | `/__anteroom/admin/api/status` | Queue health; answers even when Redis is down |
 | `GET` | `/__anteroom/admin/api/rooms` | Every room with its counters |
 | `GET` | `/__anteroom/admin/api/rooms/{room}/stats` | One room's counters |
 | `PUT` | `/__anteroom/admin/api/rooms/{room}/config` | Change `rate`, `max_active`, `session_ttl_secs`, `abandon_after_secs` |
@@ -150,10 +191,15 @@ the file; start it with `--reseed` to make the file win.
 - Anteroom reserves the URL prefix `/__anteroom/` for itself. Nothing under it
   is ever proxied. Everything else belongs to your site.
 - **If Redis is unreachable, nobody is admitted.** Waiting visitors are held on
-  the page and let in when it recovers. Waving everyone through would hand your
-  origin the exact spike anteroom is there to prevent.
+  the page and let in when it recovers — no restart needed. Waving everyone
+  through would hand your origin the exact spike anteroom is there to prevent.
+  If you'd rather serve the site unprotected than serve nobody, set
+  `fail_open: true`; anteroom then proxies everyone through, but only after
+  the queue has been unreachable for `fail_open_after` (30s by default), and it
+  says so loudly in the logs and on the dashboard while it does.
 - Anteroom does not terminate TLS. Run it behind your load balancer and set
-  `secure_cookies: true`.
+  `secure_cookies: true`. See [docs/production.md](docs/production.md) for
+  nginx and ALB configuration, Redis persistence, and sizing.
 - `preserve_host: true` on a room forwards the visitor's `Host` to the origin,
   for backends that serve several virtual hosts.
 
