@@ -408,6 +408,14 @@ body {
   font-size: 0.9375rem;
 }
 
+/* Reserved for the one condition that means anteroom is not protecting
+   anything: unmissable, and never used for ordinary errors. */
+.banner--alarm {
+  border-color: var(--alarm);
+  border-left-width: 4px;
+  background: color-mix(in srgb, var(--alarm) 18%, transparent);
+}
+
 .empty {
   padding: 2.5rem 0;
   color: var(--muted);

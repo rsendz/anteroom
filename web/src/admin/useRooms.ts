@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Api, ApiError, type Room } from "./api";
+import { Api, ApiError, type Room, type Status } from "./api";
 
 /** How many samples the sparklines keep. At 2s a poll, this is two minutes. */
 const HISTORY = 60;
@@ -10,6 +10,7 @@ export type RoomHistory = Map<string, number[]>;
 export type RoomsState = {
   rooms: Room[];
   history: RoomHistory;
+  status: Status | null;
   error: string | null;
   unauthorized: boolean;
   loading: boolean;
@@ -33,8 +34,19 @@ export function useRooms(api: Api): RoomsState {
   const [, bumpHistory] = useState(0);
   const timer = useRef<number | undefined>(undefined);
 
+  const [status, setStatus] = useState<Status | null>(null);
+
   const poll = useCallback(
     async (signal: AbortSignal) => {
+      // Health first, and separately: it is answerable while the queue store
+      // is down, which is exactly when someone is watching this screen.
+      try {
+        const health = await api.status(signal);
+        if (!signal.aborted) setStatus(health);
+      } catch {
+        // Reported through the room error below.
+      }
+
       try {
         const { rooms: next } = await api.listRooms(signal);
         if (signal.aborted) return;
@@ -85,5 +97,5 @@ export function useRooms(api: Api): RoomsState {
     void poll(controller.signal);
   }, [poll]);
 
-  return { rooms, history: history.current, error, unauthorized, loading, refresh };
+  return { rooms, history: history.current, status, error, unauthorized, loading, refresh };
 }

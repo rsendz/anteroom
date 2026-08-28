@@ -46,6 +46,16 @@ export class ApiError extends Error {
   }
 }
 
+/** Server-side health, answerable even when the queue store is unreachable. */
+export type Status = {
+  queue_healthy: boolean;
+  fail_open_enabled: boolean;
+  failing_open: boolean;
+  unhealthy_secs: number;
+  fail_open_after_secs: number;
+  message?: string;
+};
+
 export class Api {
   constructor(
     private readonly base: string,
@@ -54,6 +64,10 @@ export class Api {
 
   listRooms(signal?: AbortSignal): Promise<{ rooms: Room[] }> {
     return this.request("rooms", { signal });
+  }
+
+  status(signal?: AbortSignal): Promise<Status> {
+    return this.request("status", { signal });
   }
 
   setConfig(room: string, patch: ConfigPatch): Promise<Snapshot> {

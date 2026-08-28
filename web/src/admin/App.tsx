@@ -40,7 +40,7 @@ function Dashboard({
   onSignOut: (message: string | null) => void;
 }) {
   const api = useMemo(() => new Api(apiPath, token), [apiPath, token]);
-  const { rooms, history, error, unauthorized, loading, refresh } = useRooms(api);
+  const { rooms, history, status, error, unauthorized, loading, refresh } = useRooms(api);
   const [busyRoom, setBusyRoom] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -101,6 +101,23 @@ function Dashboard({
           Forget token
         </button>
       </header>
+
+      {/* The loudest thing on the page when it applies: an operator must
+          never discover by accident that their protection is off. */}
+      {status !== null && status.failing_open ? (
+        <p className="banner banner--alarm" role="alert">
+          <strong>Letting everyone through.</strong> {status.message} Unreachable for{" "}
+          {status.unhealthy_secs}s.
+        </p>
+      ) : null}
+      {status !== null && !status.queue_healthy && !status.failing_open ? (
+        <p className="banner" role="alert">
+          {status.message} Unreachable for {status.unhealthy_secs}s
+          {status.fail_open_enabled
+            ? `; letting visitors through after ${status.fail_open_after_secs}s.`
+            : "."}
+        </p>
+      ) : null}
 
       {error === null ? null : (
         <p className="banner" role="alert">
