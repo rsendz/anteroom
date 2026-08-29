@@ -118,6 +118,26 @@ func (p Phase) String() string {
 	}
 }
 
+// Phases cross the API as their names rather than their numbers, so a reader
+// of the admin API or the position stream sees "draw" instead of 2.
+func (p Phase) MarshalJSON() ([]byte, error) {
+	return []byte(`"` + p.String() + `"`), nil
+}
+
+func (p *Phase) UnmarshalJSON(b []byte) error {
+	switch string(b) {
+	case `"before"`:
+		*p = PhaseBefore
+	case `"draw"`:
+		*p = PhaseDraw
+	case `"closed"`:
+		*p = PhaseClosed
+	default:
+		*p = PhaseQueueing
+	}
+	return nil
+}
+
 // Resolution is what one visitor request resolves to.
 type Resolution struct {
 	// Admitted means the visitor holds a live session and may reach the origin.
