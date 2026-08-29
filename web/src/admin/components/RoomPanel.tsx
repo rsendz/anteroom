@@ -34,10 +34,15 @@ export const RoomPanel = memo(function RoomPanel({
             {room.origin}
           </p>
         </div>
-        <span className={`badge ${room.paused ? "badge--paused" : "badge--open"}`}>
-          {room.paused ? "Paused" : "Admitting"}
-        </span>
+        <StatusBadge room={room} />
       </header>
+
+      {room.phase === "draw" || room.phase === "before" ? (
+        <p className="schedule">
+          {room.lottery ? "Drawing for places. " : ""}
+          Doors open {formatWhen(room.admits_at_ms)}.
+        </p>
+      ) : null}
 
       <div className="tiles">
         <Tile label="Waiting" value={format(room.waiting)} />
@@ -186,6 +191,42 @@ function RateForm({
       ) : null}
     </form>
   );
+}
+
+/**
+ * What the room is actually doing. Pausing is an operator's decision and a
+ * schedule is the clock's, so they read differently: a scheduled room sitting
+ * shut is working as intended, not stopped.
+ */
+function StatusBadge({ room }: { room: Room }) {
+  if (room.paused) {
+    return <span className="badge badge--paused">Paused</span>;
+  }
+  switch (room.phase) {
+    case "before":
+      return <span className="badge badge--waiting">Not open yet</span>;
+    case "draw":
+      return (
+        <span className="badge badge--waiting">{room.lottery ? "Drawing" : "Collecting"}</span>
+      );
+    case "closed":
+      return <span className="badge badge--paused">Closed</span>;
+    default:
+      return <span className="badge badge--open">Admitting</span>;
+  }
+}
+
+/** An absolute time, plus how far off it is, which is what an operator asks. */
+function formatWhen(ms: number): string {
+  if (!ms) return "when resumed";
+  const when = new Date(ms);
+  const seconds = Math.round((ms - Date.now()) / 1000);
+  const clock = when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  if (seconds <= 0) return `at ${clock}`;
+  if (seconds < 90) return `at ${clock} (in ${seconds}s)`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 90) return `at ${clock} (in ${minutes} min)`;
+  return `at ${when.toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`;
 }
 
 function Tile({ label, value }: { label: string; value: string }) {

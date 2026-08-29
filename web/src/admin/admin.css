@@ -188,6 +188,19 @@ body {
   background: color-mix(in srgb, var(--brass) 10%, transparent);
 }
 
+.badge--waiting {
+  color: var(--muted);
+  border: 1px solid var(--panel-edge);
+  background: var(--leaf);
+}
+
+.schedule {
+  margin: -0.75rem 0 1.25rem;
+  font-family: var(--board);
+  font-size: 0.8125rem;
+  color: var(--brass);
+}
+
 .badge--paused {
   color: var(--alarm);
   border: 1px solid color-mix(in srgb, var(--alarm) 45%, transparent);
@@ -229,11 +242,27 @@ body {
 
 /* --- Sparkline ---------------------------------------------------------- */
 
+.sparkline-row {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-bottom: 1.25rem;
+}
+
 .sparkline {
   display: block;
-  width: 100%;
-  height: 2.75rem;
-  margin-bottom: 1.25rem;
+  flex: 1;
+  height: 2.25rem;
+  min-width: 0;
+}
+
+/* The range the line is drawn against, since it is not scaled from zero. */
+.sparkline__caption {
+  flex-shrink: 0;
+  font-family: var(--board);
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+  color: var(--muted);
 }
 
 .sparkline--empty {
@@ -250,11 +279,6 @@ body {
   stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
   stroke-linejoin: round;
-}
-
-.sparkline__area {
-  fill: color-mix(in srgb, var(--brass) 12%, transparent);
-  stroke: none;
 }
 
 /* --- Ledger ------------------------------------------------------------- */
