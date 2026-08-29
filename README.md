@@ -5,6 +5,10 @@ get more traffic than it can take, and instead of the page falling over,
 visitors see a fair queue with their position and are let through at a rate the
 site can actually handle.
 
+<p align="center">
+  <img src="docs/images/waiting.png" alt="The anteroom waiting page: a split-flap board showing position 782 of 782 waiting, with an estimated wait of about 5 minutes." width="620">
+</p>
+
 ```
 visitors ──▶ anteroom ──▶ your site
                 │
@@ -13,6 +17,10 @@ visitors ──▶ anteroom ──▶ your site
 
 Anteroom is a reverse proxy, so the site behind it needs no changes at all —
 no SDK, no middleware, no code.
+
+The number on the board physically turns over as the queue moves. That is the
+whole reason it is there: a visitor who can see the line advancing doesn't
+reach for reload, and reloading is the traffic anteroom exists to absorb.
 
 ## Try it
 
@@ -112,6 +120,10 @@ During the draw the page shows a countdown and how many have entered, not a
 position: a position would either shuffle as others join (which reads as
 broken) or reward whoever refreshed earliest.
 
+<p align="center">
+  <img src="docs/images/draw.png" alt="A scheduled room before its doors open: a countdown reading 7:04, 1,402 people already in, and a note that arriving early doesn't improve your chances." width="620">
+</p>
+
 ## Rooms
 
 One anteroom can protect several sites, chosen by hostname:
@@ -158,6 +170,17 @@ This is strictly a side channel. Publishing never blocks an admission or a page
 load, events are dropped (with a log line) rather than allowed to back up, and
 anteroom runs exactly the same with `kafka.brokers` empty or the broker down.
 Try `docker compose stop kafka` against the demo and watch the queue carry on.
+
+## The control room
+
+Every room's counters, a sparkline of queue depth, and the controls that matter
+during an incident — rate, concurrency, pause, and emptying the queue — at
+`/__anteroom/admin/`. Changes take effect on the next admission pass, without a
+restart.
+
+<p align="center">
+  <img src="docs/images/dashboard.png" alt="The anteroom control room showing two rooms: shop admitting with 782 waiting and a draining sparkline, and tickets in its draw window with doors opening in 8 minutes." width="820">
+</p>
 
 ## Admin API
 
