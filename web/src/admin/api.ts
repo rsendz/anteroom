@@ -16,7 +16,15 @@ export type Snapshot = {
   total_refused: number;
   join_limit: number;
   join_window_secs: number;
+  phase: Phase;
+  lottery: boolean;
+  queue_opens_at_ms: number;
+  admits_at_ms: number;
+  closes_at_ms: number;
 };
+
+/** Where a scheduled room is in its timetable; mirrors queue.Phase in Go. */
+export type Phase = "queueing" | "before" | "draw" | "closed";
 
 export type Room = Snapshot & {
   match_host: string;

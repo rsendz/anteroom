@@ -52,10 +52,11 @@ export function useRooms(api: Api): RoomsState {
         if (signal.aborted) return;
 
         for (const room of next) {
-          const series = history.current.get(room.room) ?? [];
-          series.push(room.waiting);
-          if (series.length > HISTORY) series.shift();
-          history.current.set(room.room, series);
+          // A new array each time, not a push: the panels are memoised on this
+          // prop, so mutating it in place would leave them rendering the first
+          // sample forever.
+          const series = [...(history.current.get(room.room) ?? []), room.waiting];
+          history.current.set(room.room, series.slice(-HISTORY));
         }
         bumpHistory((n) => n + 1);
         setRooms(next);
