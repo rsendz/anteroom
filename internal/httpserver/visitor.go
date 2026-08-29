@@ -125,9 +125,7 @@ type waitingPage struct {
 	Lottery bool
 	// Milliseconds since the epoch, with the server's own clock alongside, so
 	// the countdown is right even on a device whose clock is not.
-	OpensAtMS  int64
 	AdmitsAtMS int64
-	ClosesAtMS int64
 	NowMS      int64
 	// RefreshSeconds drives the no-JavaScript fallback.
 	RefreshSeconds int
@@ -159,9 +157,7 @@ func (s *Server) renderWaiting(w http.ResponseWriter, r *http.Request, name stri
 		PlainRefresh:   !s.assets.built("queue"),
 		Phase:          res.Phase.String(),
 		Lottery:        snap.Lottery,
-		OpensAtMS:      snap.QueueOpensAtMS,
 		AdmitsAtMS:     snap.AdmitsAtMS,
-		ClosesAtMS:     snap.ClosesAtMS,
 		NowMS:          time.Now().UnixMilli(),
 	}
 	if page.Title == "" {
@@ -169,7 +165,7 @@ func (s *Server) renderWaiting(w http.ResponseWriter, r *http.Request, name stri
 	}
 	// Before the doors open there is no line to be in, so the entrant count is
 	// what the page shows instead of a position.
-	if res.Phase == queue.PhaseDraw || res.Phase == queue.PhaseBefore {
+	if hidesPosition(res.Phase) {
 		page.Position = 0
 		page.Waiting = snap.Waiting
 	}
@@ -210,9 +206,7 @@ func (s *Server) joinBucket(r *http.Request) string {
 // warnUntrustedProxy tells the operator, at most once a minute, that anteroom
 // is behind something it was not told to trust.
 func (s *Server) warnUntrustedProxy(peer string) {
-	now := time.Now().Unix()
-	last := s.lastProxyWarning.Load()
-	if now-last < 60 || !s.lastProxyWarning.CompareAndSwap(last, now) {
+	if !s.proxyWarnings.allow(time.Minute) {
 		return
 	}
 	s.log.Warn("anteroom: requests carry X-Forwarded-For from an untrusted peer, "+
@@ -274,6 +268,15 @@ func etaSeconds(position int64, snap queue.Snapshot) int64 {
 		return 0
 	}
 	return int64(math.Ceil(float64(position) / snap.Rate))
+}
+
+// hidesPosition reports the phases where a visitor has no place to show:
+// before the queue opens nobody is in line, and during the draw the order is
+// deliberately withheld so an early place cannot be worked out. The waiting
+// page and the position stream must agree on this, or a visitor would see one
+// answer on load and the other a second later.
+func hidesPosition(p queue.Phase) bool {
+	return p == queue.PhaseDraw || p == queue.PhaseBefore
 }
 
 // waitingTotal reconciles the room total with the visitor's own position. The

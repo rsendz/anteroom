@@ -60,6 +60,13 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 	json.NewEncoder(w).Encode(body)
 }
 
+// storeUnavailable reports a queue-store failure. Every admin route answers
+// these the same way, so an operator reading a 502 always sees where it came
+// from rather than a bare Redis error.
+func storeUnavailable(w http.ResponseWriter, err error) {
+	writeJSON(w, http.StatusBadGateway, errorBody{Error: "queue store unavailable: " + err.Error()})
+}
+
 // room resolves and validates the {room} path segment.
 func (s *Server) room(w http.ResponseWriter, r *http.Request) (string, bool) {
 	name := r.PathValue("room")
@@ -82,7 +89,7 @@ func (s *Server) handleListRooms(w http.ResponseWriter, r *http.Request) {
 	for _, name := range names {
 		snap, err := s.store.Snapshot(r.Context(), name)
 		if err != nil {
-			writeJSON(w, http.StatusBadGateway, errorBody{Error: "queue store unavailable: " + err.Error()})
+			storeUnavailable(w, err)
 			return
 		}
 		out = append(out, roomView{
@@ -101,7 +108,7 @@ func (s *Server) handleRoomStats(w http.ResponseWriter, r *http.Request) {
 	}
 	snap, err := s.store.Snapshot(r.Context(), name)
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, errorBody{Error: "queue store unavailable: " + err.Error()})
+		storeUnavailable(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, snap)
@@ -130,7 +137,7 @@ func (s *Server) handleSetConfig(w http.ResponseWriter, r *http.Request) {
 	// the rest exactly as it was.
 	snap, err := s.store.Snapshot(r.Context(), name)
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, errorBody{Error: "queue store unavailable: " + err.Error()})
+		storeUnavailable(w, err)
 		return
 	}
 	cfg := queue.RoomConfig{
@@ -157,7 +164,7 @@ func (s *Server) handleSetConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.store.SetConfig(r.Context(), name, cfg); err != nil {
-		writeJSON(w, http.StatusBadGateway, errorBody{Error: err.Error()})
+		storeUnavailable(w, err)
 		return
 	}
 	s.emitter.Emit(events.New(events.TypeConfigChanged, name, "", map[string]any{
@@ -192,7 +199,7 @@ func (s *Server) handlePause(paused bool) http.HandlerFunc {
 			return
 		}
 		if err := s.store.SetPaused(r.Context(), name, paused); err != nil {
-			writeJSON(w, http.StatusBadGateway, errorBody{Error: err.Error()})
+			storeUnavailable(w, err)
 			return
 		}
 		s.emitter.Emit(events.New(events.TypeConfigChanged, name, "", map[string]any{"paused": paused}))
@@ -207,7 +214,7 @@ func (s *Server) handleFlush(w http.ResponseWriter, r *http.Request) {
 	}
 	removed, err := s.store.Flush(r.Context(), name)
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, errorBody{Error: err.Error()})
+		storeUnavailable(w, err)
 		return
 	}
 	s.emitter.Emit(events.New(events.TypeConfigChanged, name, "", map[string]any{"flushed": removed}))
@@ -220,7 +227,7 @@ func (s *Server) handleFlush(w http.ResponseWriter, r *http.Request) {
 func (s *Server) respondWithSnapshot(w http.ResponseWriter, r *http.Request, name string) {
 	snap, err := s.store.Snapshot(r.Context(), name)
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, errorBody{Error: err.Error()})
+		storeUnavailable(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, snap)

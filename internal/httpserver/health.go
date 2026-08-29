@@ -26,8 +26,8 @@ type queueHealth struct {
 	// open records whether we are currently letting visitors past, so the
 	// transitions either way are announced exactly once.
 	open atomic.Bool
-	// lastLog rate-limits the "protection is off" message (unix seconds).
-	lastLog atomic.Int64
+	// repeats rate-limits the "protection is off" message.
+	repeats throttle
 }
 
 func newQueueHealth(enabled bool, grace time.Duration) *queueHealth {
@@ -117,9 +117,7 @@ func (s *Server) announceFailOpen(room string, failingOpen bool) {
 	}
 	// Still failing open: repeat the warning occasionally so it stays visible
 	// in a busy log, but not on every request.
-	now := time.Now().Unix()
-	last := s.health.lastLog.Load()
-	if now-last >= 30 && s.health.lastLog.CompareAndSwap(last, now) {
+	if s.health.repeats.allow(30 * time.Second) {
 		s.log.Error("anteroom: still letting visitors through unchecked",
 			"unhealthy_for", s.health.unhealthyFor().Round(time.Second))
 	}

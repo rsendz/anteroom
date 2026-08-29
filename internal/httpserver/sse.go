@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/luisresendez/anteroom/internal/queue"
 	"github.com/luisresendez/anteroom/internal/token"
 )
 
@@ -97,7 +96,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 			}
 			// Nobody has a place until the doors open, so the page shows the
 			// number of entrants and a countdown rather than a position.
-			if res.Phase == queue.PhaseDraw || res.Phase == queue.PhaseBefore {
+			if hidesPosition(res.Phase) {
 				update.Position = 0
 				update.Waiting = snap.Waiting
 				update.ETASeconds = 0

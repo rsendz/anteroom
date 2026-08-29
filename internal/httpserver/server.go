@@ -15,7 +15,6 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/luisresendez/anteroom/internal/config"
@@ -45,8 +44,8 @@ type Server struct {
 	assets     assets
 	ipResolver *clientIPResolver
 	health     *queueHealth
-	// lastProxyWarning rate-limits the untrusted-proxy warning (unix seconds).
-	lastProxyWarning atomic.Int64
+	// proxyWarnings rate-limits the untrusted-proxy warning.
+	proxyWarnings throttle
 
 	// sseInterval is how often a waiting page is told its position.
 	sseInterval time.Duration
