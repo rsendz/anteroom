@@ -18,17 +18,23 @@ build: web
 	go build -o $(BINARY) ./cmd/anteroom
 
 .PHONY: web
-web:
-	cd web && npm ci --no-audit --fund=false && npm run build
+web: web/node_modules
+	cd web && npm run build
+
+# A real file target, so a rebuild does not reinstall from scratch every time.
+web/node_modules: web/package.json web/package-lock.json
+	cd web && npm ci --no-audit --fund=false
+	touch $@
 
 .PHONY: test
 test:
 	go test ./... -race
 
+# Depends on node_modules so that `make check` works on a fresh clone.
 .PHONY: check
-check: test
+check: test web/node_modules
 	go vet ./...
-	gofmt -l . | tee /dev/stderr | (! read)
+	gofmt -l cmd internal | tee /dev/stderr | (! read)
 	cd web && npm run check
 
 .PHONY: demo
@@ -41,4 +47,4 @@ demo-down:
 
 .PHONY: clean
 clean:
-	rm -rf bin internal/httpserver/web/static/assets internal/httpserver/web/static/manifest.json
+	rm -rf bin internal/httpserver/web/static

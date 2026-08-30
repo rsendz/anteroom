@@ -1,0 +1,9 @@
+# The build context is copied wholesale into the Go stage, so anything large
+# and rebuildable is kept out of it. node_modules alone is ~64 MB, and the
+# image builds its own copy from the lockfile anyway.
+.git
+.github
+bin
+web/node_modules
+internal/httpserver/web/static
+docs/images

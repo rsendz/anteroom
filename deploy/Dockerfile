@@ -6,7 +6,6 @@ WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --no-audit --fund=false
 COPY web/ ./
-COPY internal/httpserver/web/ /src/internal/httpserver/web/
 RUN npm run build
 
 FROM golang:1.24-alpine AS build
