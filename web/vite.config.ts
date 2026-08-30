@@ -19,9 +19,6 @@ export default defineConfig({
         admin: "src/admin/main.tsx",
       },
     },
-    // The waiting page is served to every queued visitor during a spike, so
-    // its bundle is kept small enough to arrive in the first round trip.
-    assetsInlineLimit: 0,
     target: "es2020",
   },
   server: {

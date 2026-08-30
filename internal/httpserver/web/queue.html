@@ -38,7 +38,7 @@
   <!-- Before the doors open nobody has a place, so the page shows how long is
        left and how many are in rather than a position that would only reward
        whoever refreshed earliest. -->
-  <p class="board-label" data-role="board-label">
+  <p class="board-label">
     {{if eq .Phase "before"}}The queue opens in{{else}}Doors open in{{end}}
   </p>
   <p class="countdown" data-role="countdown">&#8212;</p>
@@ -55,7 +55,7 @@
     doors open — there's no need to reload.{{end}}
   </p>
   {{else}}
-  <p class="board-label" data-role="board-label">Your position</p>
+  <p class="board-label">Your position</p>
   <!-- The number is rendered here too, so a visitor whose scripts never
        arrive still sees where they stand. The board replaces it on load. -->
   <div class="board" data-role="board">

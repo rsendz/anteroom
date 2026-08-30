@@ -8,10 +8,8 @@
  */
 import { FlapBoard } from "./flap";
 import { Countdown } from "./countdown";
+import type { Phase } from "../shared";
 import "./queue.css";
-
-/** Where a scheduled room is in its timetable; mirrors queue.Phase in Go. */
-type Phase = "queueing" | "before" | "draw" | "closed";
 
 type Update = {
   position: number;
@@ -189,7 +187,7 @@ function requireEl(root: ParentNode, selector: string): HTMLElement {
 }
 
 /** Rounds a wait to something a person would actually say out loud. */
-function formatWait(seconds: number): string {
+export function formatWait(seconds: number): string {
   if (seconds < 60) {
     const rounded = Math.max(5, Math.ceil(seconds / 5) * 5);
     return `${rounded} seconds`;

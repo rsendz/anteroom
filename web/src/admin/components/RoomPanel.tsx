@@ -217,7 +217,7 @@ function StatusBadge({ room }: { room: Room }) {
 }
 
 /** An absolute time, plus how far off it is, which is what an operator asks. */
-function formatWhen(ms: number): string {
+export function formatWhen(ms: number): string {
   if (!ms) return "when resumed";
   const when = new Date(ms);
   const seconds = Math.round((ms - Date.now()) / 1000);

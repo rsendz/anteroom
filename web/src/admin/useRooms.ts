@@ -29,9 +29,8 @@ export function useRooms(api: Api): RoomsState {
   const [loading, setLoading] = useState(true);
 
   // History is a ref: it changes on every poll but only the sparklines read
-  // it, and they re-render anyway when `rooms` updates.
+  // it, and the setRooms below re-renders them on the same tick.
   const history = useRef<RoomHistory>(new Map());
-  const [, bumpHistory] = useState(0);
   const timer = useRef<number | undefined>(undefined);
 
   const [status, setStatus] = useState<Status | null>(null);
@@ -58,7 +57,6 @@ export function useRooms(api: Api): RoomsState {
           const series = [...(history.current.get(room.room) ?? []), room.waiting];
           history.current.set(room.room, series.slice(-HISTORY));
         }
-        bumpHistory((n) => n + 1);
         setRooms(next);
         setError(null);
         setUnauthorized(false);

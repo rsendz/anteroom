@@ -1,5 +1,9 @@
 /** Typed client for the anteroom admin API. */
 
+import type { Phase } from "../shared";
+
+export type { Phase };
+
 export type Snapshot = {
   room: string;
   waiting: number;
@@ -22,9 +26,6 @@ export type Snapshot = {
   admits_at_ms: number;
   closes_at_ms: number;
 };
-
-/** Where a scheduled room is in its timetable; mirrors queue.Phase in Go. */
-export type Phase = "queueing" | "before" | "draw" | "closed";
 
 export type Room = Snapshot & {
   match_host: string;

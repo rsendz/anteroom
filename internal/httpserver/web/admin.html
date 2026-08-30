@@ -11,7 +11,6 @@
 <body>
 <div id="root" data-api="{{.APIPath}}"></div>
 {{if not .Built}}
-<noscript></noscript>
 <p style="max-width:32rem;margin:14vh auto;padding:0 1.5rem;font:16px/1.6 ui-serif,Georgia,serif;color:#e8e2d4;background:#16211f">
   The control room needs its front-end assets. Build them with <code>make web</code>,
   or manage rooms through the API under <code>{{.APIPath}}</code>.
