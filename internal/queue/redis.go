@@ -40,17 +40,6 @@ func keysFor(room string, suffixes ...string) []string {
 	return out
 }
 
-func (s *RedisStore) Join(ctx context.Context, room, id string) (int64, error) {
-	pos, err := joinScript.Run(ctx, s.rdb,
-		keysFor(room, "seq", "waiting", "seen", "stats"),
-		id, unixSeconds(s.now()),
-	).Int64()
-	if err != nil {
-		return 0, fmt.Errorf("queue: join %s/%s: %w", room, id, err)
-	}
-	return pos, nil
-}
-
 func (s *RedisStore) Resolve(ctx context.Context, room, id, bucket string) (Resolution, error) {
 	// The limit itself lives in the room's settings and is read inside the
 	// script, so a change through the admin API takes effect at once and the
@@ -81,38 +70,6 @@ func (s *RedisStore) Resolve(ctx context.Context, room, id, bucket string) (Reso
 		Refused:  raw[3] == 1,
 		Phase:    Phase(raw[4]),
 	}, nil
-}
-
-func (s *RedisStore) Position(ctx context.Context, room, id string) (int64, error) {
-	// Read-only, which keeps serving the waiting page cheap under a spike.
-	pos, err := positionScript.Run(ctx, s.rdb, keysFor(room, "waiting"), id).Int64()
-	if err != nil {
-		return 0, fmt.Errorf("queue: position %s/%s: %w", room, id, err)
-	}
-	return pos, nil
-}
-
-func (s *RedisStore) Heartbeat(ctx context.Context, room, id string) error {
-	// XX updates only members already present, and a visitor sits in `seen`
-	// exactly while they are waiting, so this can never resurrect anyone.
-	err := heartbeatScript.Run(ctx, s.rdb,
-		keysFor(room, "seen"), id, unixSeconds(s.now()),
-	).Err()
-	if err != nil {
-		return fmt.Errorf("queue: heartbeat %s/%s: %w", room, id, err)
-	}
-	return nil
-}
-
-func (s *RedisStore) Touch(ctx context.Context, room, id string) (bool, error) {
-	alive, err := touchScript.Run(ctx, s.rdb,
-		keysFor(room, "active", "conf"),
-		id, unixMillis(s.now()),
-	).Int64()
-	if err != nil {
-		return false, fmt.Errorf("queue: touch %s/%s: %w", room, id, err)
-	}
-	return alive == 1, nil
 }
 
 func (s *RedisStore) Admit(ctx context.Context, room string) (AdmitResult, error) {
@@ -258,12 +215,6 @@ func boolField(b bool) string {
 		return "1"
 	}
 	return "0"
-}
-
-// unixSeconds keeps millisecond precision so heartbeat and session scores stay
-// comparable with the millisecond clock the admission pass uses.
-func unixSeconds(t time.Time) string {
-	return strconv.FormatFloat(float64(t.UnixMilli())/1000, 'f', 3, 64)
 }
 
 func unixMillis(t time.Time) string { return strconv.FormatInt(t.UnixMilli(), 10) }

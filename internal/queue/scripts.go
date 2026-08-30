@@ -60,27 +60,6 @@ local function drawScore(conf, id)
 end
 `
 
-// joinScript enqueues a visitor if they are not already waiting and returns
-// their 1-based position. Re-joining is a no-op that only refreshes the
-// heartbeat, so a reloaded queue page never loses its place.
-//
-//	KEYS: seq, waiting, seen, stats
-//	ARGV: id, now_seconds
-var joinScript = redis.NewScript(`
-local id    = ARGV[1]
-local now_s = tonumber(ARGV[2])
-
-local rank = redis.call('ZRANK', KEYS[2], id)
-if not rank then
-  local seq = redis.call('INCR', KEYS[1])
-  redis.call('ZADD', KEYS[2], seq, id)
-  redis.call('HINCRBY', KEYS[4], 'joined', 1)
-  rank = redis.call('ZRANK', KEYS[2], id)
-end
-redis.call('ZADD', KEYS[3], now_s, id)
-return rank + 1
-`)
-
 // admitScript is one full admission pass, run by the dispatcher. Doing the
 // whole pass in Lua keeps it atomic: two replicas ticking at the same instant
 // can never admit the same visitor twice or jointly exceed the rate, because
@@ -224,25 +203,6 @@ redis.call('ZADD', KEYS[2], now_s, id)
 return {0, rank + 1, joined, 0, phase}
 `)
 
-// positionScript returns a waiting visitor's 1-based place in line, or 0 when
-// they are not waiting at all.
-//
-//	KEYS: waiting
-//	ARGV: id
-var positionScript = redis.NewScript(`
-local rank = redis.call('ZRANK', KEYS[1], ARGV[1])
-if not rank then return 0 end
-return rank + 1
-`)
-
-// heartbeatScript records that a waiting visitor is still watching.
-//
-//	KEYS: seen
-//	ARGV: id, now_seconds
-var heartbeatScript = redis.NewScript(
-	`return redis.call('ZADD', KEYS[1], 'XX', ARGV[2], ARGV[1])`,
-)
-
 // flushScript empties the waiting queue, leaving admitted sessions alone so
 // visitors already on the site are not thrown off it.
 //
@@ -258,7 +218,7 @@ return n
 //	KEYS: hash
 //	ARGV: field, value, field, value, ...
 var hsetScript = redis.NewScript(`
-for i = 1, #ARGV, 2 do redis.call('HSET', KEYS[1], ARGV[i], ARGV[i + 1]) end
+redis.call('HSET', KEYS[1], unpack(ARGV))
 return 1
 `)
 
@@ -279,26 +239,6 @@ return 1
 var anchorBucketScript = redis.NewScript(`
 redis.call('HSETNX', KEYS[1], 'tokens', '0')
 redis.call('HSETNX', KEYS[1], 'last', ARGV[1])
-return 1
-`)
-
-// touchScript refreshes an admitted session, returning 0 when the session has
-// gone stale so the caller re-queues the visitor. This runs on every proxied
-// request, so it is deliberately one round trip.
-//
-//	KEYS: active, conf
-//	ARGV: id, now_millis
-var touchScript = redis.NewScript(`
-local now_s = tonumber(ARGV[2]) / 1000
-local ttl   = tonumber(redis.call('HGET', KEYS[2], 'ttl_secs')) or 0
-local score = tonumber(redis.call('ZSCORE', KEYS[1], ARGV[1]))
-
-if not score then return 0 end
-if ttl > 0 and score < now_s - ttl then
-  redis.call('ZREM', KEYS[1], ARGV[1])
-  return 0
-end
-redis.call('ZADD', KEYS[1], now_s, ARGV[1])
 return 1
 `)
 

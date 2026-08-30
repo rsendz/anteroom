@@ -12,27 +12,27 @@ import (
 // lives in Redis rather than the config file so that changes made through the
 // admin API take effect immediately and survive a restart.
 type RoomConfig struct {
-	Rate         float64       `json:"rate"`
-	MaxActive    int           `json:"max_active"`
-	SessionTTL   time.Duration `json:"-"`
-	AbandonAfter time.Duration `json:"-"`
-	Paused       bool          `json:"paused"`
+	Rate         float64
+	MaxActive    int
+	SessionTTL   time.Duration
+	AbandonAfter time.Duration
+	Paused       bool
 	// JoinLimit caps how many visitors may newly enter the queue from one
 	// address per JoinWindow. Zero disables the limit.
-	JoinLimit  int           `json:"join_limit"`
-	JoinWindow time.Duration `json:"-"`
+	JoinLimit  int
+	JoinWindow time.Duration
 
 	// Lottery settles the order of everyone collected before the doors open by
 	// drawing rather than by arrival, so turning up early gains nothing.
-	Lottery bool `json:"lottery"`
+	Lottery bool
 	// DrawSalt keeps draw places from being worked out before the room exists.
 	// It is generated once per room and never leaves Redis.
-	DrawSalt string `json:"-"`
+	DrawSalt string
 
 	// The schedule. A zero time means unset.
-	QueueOpensAt time.Time `json:"-"`
-	AdmitsAt     time.Time `json:"-"`
-	ClosesAt     time.Time `json:"-"`
+	QueueOpensAt time.Time
+	AdmitsAt     time.Time
+	ClosesAt     time.Time
 }
 
 // Snapshot is a point-in-time view of one room, used by the admin API and the
@@ -83,7 +83,9 @@ type AdmitResult struct {
 	Abandoned []string
 }
 
-func (r AdmitResult) empty() bool {
+// Empty reports a pass that changed nothing, which is the common case between
+// arrivals and lets the caller stay quiet.
+func (r AdmitResult) Empty() bool {
 	return len(r.Admitted) == 0 && len(r.Expired) == 0 && len(r.Abandoned) == 0
 }
 
@@ -124,6 +126,8 @@ func (p Phase) MarshalJSON() ([]byte, error) {
 	return []byte(`"` + p.String() + `"`), nil
 }
 
+// UnmarshalJSON keeps Snapshot round-trippable, so a Go client of the admin
+// API -- the test suite included -- can decode a response back into it.
 func (p *Phase) UnmarshalJSON(b []byte) error {
 	switch string(b) {
 	case `"before"`:

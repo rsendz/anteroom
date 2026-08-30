@@ -17,10 +17,9 @@ func discardLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
-// fakeStore records Admit calls and returns scripted results.
+// fakeStore records Admit calls and returns scripted results. Admit is the
+// whole of what the dispatcher needs, so there is nothing else to stub.
 type fakeStore struct {
-	queue.Store // unimplemented methods panic if the dispatcher ever calls them
-
 	mu      sync.Mutex
 	calls   []string
 	results map[string]queue.AdmitResult

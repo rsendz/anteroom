@@ -51,13 +51,22 @@ func (f *fixture) seed(rate float64, maxActive int, ttl, abandon time.Duration) 
 
 func (f *fixture) advance(d time.Duration) { f.clock = f.clock.Add(d) }
 
+// join puts visitors in line through the ordinary request path, which is the
+// only way production code ever enqueues anyone.
 func (f *fixture) join(ids ...string) {
 	f.t.Helper()
 	for _, id := range ids {
-		if _, err := f.store.Join(f.ctx, testRoom, id); err != nil {
-			f.t.Fatalf("join %s: %v", id, err)
-		}
+		f.joinRoom(testRoom, id)
 	}
+}
+
+func (f *fixture) joinRoom(room, id string) Resolution {
+	f.t.Helper()
+	res, err := f.store.Resolve(f.ctx, room, id, "")
+	if err != nil {
+		f.t.Fatalf("join %s/%s: %v", room, id, err)
+	}
+	return res
 }
 
 func (f *fixture) admit() AdmitResult {
@@ -76,33 +85,6 @@ func (f *fixture) snapshot() Snapshot {
 		f.t.Fatalf("snapshot: %v", err)
 	}
 	return snap
-}
-
-func TestJoinReturnsPositionAndIsIdempotent(t *testing.T) {
-	f := newFixture(t)
-	f.seed(1, 10, time.Minute, time.Minute)
-
-	for i, id := range []string{"a", "b", "c"} {
-		pos, err := f.store.Join(f.ctx, testRoom, id)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if want := int64(i + 1); pos != want {
-			t.Errorf("Join(%s) = %d, want %d", id, pos, want)
-		}
-	}
-
-	// Re-joining must not move the visitor to the back of the line.
-	pos, err := f.store.Join(f.ctx, testRoom, "a")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if pos != 1 {
-		t.Errorf("re-Join(a) = %d, want 1", pos)
-	}
-	if got := f.snapshot(); got.Waiting != 3 || got.TotalJoined != 3 {
-		t.Errorf("waiting=%d joined=%d, want 3 and 3", got.Waiting, got.TotalJoined)
-	}
 }
 
 // resolve stands in for a visitor request from an address with no join limit
@@ -562,19 +544,6 @@ func TestUnscheduledRoomIsAlwaysQueueing(t *testing.T) {
 	}
 }
 
-func TestPositionZeroWhenNotWaiting(t *testing.T) {
-	f := newFixture(t)
-	f.seed(1, 10, time.Minute, time.Minute)
-	f.join("a")
-
-	if pos, _ := f.store.Position(f.ctx, testRoom, "a"); pos != 1 {
-		t.Errorf("Position(a) = %d, want 1", pos)
-	}
-	if pos, _ := f.store.Position(f.ctx, testRoom, "stranger"); pos != 0 {
-		t.Errorf("Position(stranger) = %d, want 0", pos)
-	}
-}
-
 func TestAdmitIsFIFO(t *testing.T) {
 	f := newFixture(t)
 	// One admit per second, generous cap: order is the only thing under test.
@@ -688,33 +657,30 @@ func TestExpiredSessionsFreeCapacity(t *testing.T) {
 	}
 }
 
-func TestTouchKeepsSessionAlive(t *testing.T) {
+func TestRequestsKeepSessionAlive(t *testing.T) {
 	f := newFixture(t)
 	f.seed(100, 5, 30*time.Second, time.Hour)
 	f.join("a")
 	f.advance(time.Second)
 	f.admit()
 
-	// Touching every 20s keeps a 30s session alive indefinitely.
+	// A request every 20s keeps a 30s session alive indefinitely.
 	for range 5 {
 		f.advance(20 * time.Second)
-		alive, err := f.store.Touch(f.ctx, testRoom, "a")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !alive {
-			t.Fatal("Touch reported a touched session as dead")
+		if res := f.resolve("a"); !res.Admitted {
+			t.Fatal("an active visitor was not reported as admitted")
 		}
 	}
 
-	// Stop touching and it dies.
+	// Go quiet past the TTL and the session is dropped, putting them back in
+	// line rather than through to the origin.
 	f.advance(31 * time.Second)
-	if alive, _ := f.store.Touch(f.ctx, testRoom, "a"); alive {
-		t.Error("Touch reported an idle session as alive")
+	res := f.resolve("a")
+	if res.Admitted {
+		t.Error("an idle session past its TTL was still reported as admitted")
 	}
-	// A visitor the store never saw is likewise not alive.
-	if alive, _ := f.store.Touch(f.ctx, testRoom, "stranger"); alive {
-		t.Error("Touch reported an unknown visitor as alive")
+	if res.Position != 1 || !res.Joined {
+		t.Errorf("expired session = %+v, want re-queued at position 1", res)
 	}
 }
 
@@ -725,9 +691,7 @@ func TestAbandonedWaitersAreReaped(t *testing.T) {
 
 	// "stays" keeps its page open; "leaves" closes the tab.
 	f.advance(15 * time.Second)
-	if err := f.store.Heartbeat(f.ctx, testRoom, "stays"); err != nil {
-		t.Fatal(err)
-	}
+	f.resolve("stays")
 
 	f.advance(10 * time.Second) // 25s since "leaves" was last seen
 	res := f.admit()
@@ -742,18 +706,17 @@ func TestAbandonedWaitersAreReaped(t *testing.T) {
 	}
 }
 
-func TestHeartbeatDoesNotResurrectAdmittedVisitors(t *testing.T) {
+func TestRequestsDoNotResurrectAdmittedVisitors(t *testing.T) {
 	f := newFixture(t)
 	f.seed(100, 5, time.Minute, 20*time.Second)
 	f.join("a")
 	f.advance(time.Second)
 	f.admit()
 
-	if err := f.store.Heartbeat(f.ctx, testRoom, "a"); err != nil {
-		t.Fatal(err)
-	}
-	// An admitted visitor left `seen`, so a stray heartbeat must not put them
-	// back into the abandonment set (where a later reap would "abandon" them).
+	// An admitted visitor left `seen`, so their ordinary requests must not put
+	// them back into the abandonment set, where a later reap would "abandon"
+	// someone who is happily browsing the site.
+	f.resolve("a")
 	f.advance(time.Minute)
 	if res := f.admit(); len(res.Abandoned) != 0 {
 		t.Errorf("abandoned %v, want none", res.Abandoned)
@@ -890,13 +853,9 @@ func TestRoomsAreIsolated(t *testing.T) {
 	}
 
 	f.join("shopper")
-	if _, err := f.store.Join(f.ctx, "tickets", "fan"); err != nil {
-		t.Fatal(err)
-	}
+	f.joinRoom("tickets", "fan")
 	// The same visitor ID in two rooms is two independent queue entries.
-	if _, err := f.store.Join(f.ctx, "tickets", "shopper"); err != nil {
-		t.Fatal(err)
-	}
+	f.joinRoom("tickets", "shopper")
 
 	f.advance(time.Second)
 	if got := f.admit().Admitted; !slices.Equal(got, []string{"shopper"}) {
@@ -910,7 +869,7 @@ func TestRoomsAreIsolated(t *testing.T) {
 		t.Errorf("tickets waiting = %d, want 2 (untouched by the shop admit)", ticketSnap.Waiting)
 	}
 	// Being admitted to the shop grants nothing in tickets.
-	if alive, _ := f.store.Touch(f.ctx, "tickets", "shopper"); alive {
+	if res := f.joinRoom("tickets", "shopper"); res.Admitted {
 		t.Error("a shop session was accepted as a tickets session")
 	}
 }
@@ -944,7 +903,7 @@ func TestEmptyQueueAdmitIsHarmless(t *testing.T) {
 	f.seed(10, 10, time.Minute, time.Minute)
 	f.advance(time.Second)
 	res := f.admit()
-	if !res.empty() {
+	if !res.Empty() {
 		t.Errorf("admit on an empty room returned %+v, want nothing", res)
 	}
 }

@@ -16,9 +16,16 @@ import (
 	"github.com/luisresendez/anteroom/internal/queue"
 )
 
+// admitter is the one thing the loop needs from the queue store. Declaring it
+// here rather than depending on the whole Store keeps the loop's reach visible
+// at a glance.
+type admitter interface {
+	Admit(ctx context.Context, room string) (queue.AdmitResult, error)
+}
+
 // Dispatcher admits visitors on a fixed interval.
 type Dispatcher struct {
-	store    queue.Store
+	store    admitter
 	emitter  events.Emitter
 	rooms    []string
 	interval time.Duration
@@ -29,7 +36,7 @@ type Dispatcher struct {
 	ticks <-chan time.Time
 }
 
-func New(store queue.Store, emitter events.Emitter, rooms []string, interval time.Duration, log *slog.Logger) *Dispatcher {
+func New(store admitter, emitter events.Emitter, rooms []string, interval time.Duration, log *slog.Logger) *Dispatcher {
 	return &Dispatcher{
 		store:    store,
 		emitter:  emitter,
@@ -92,7 +99,7 @@ func (d *Dispatcher) tickRoom(ctx context.Context, room string) {
 		d.emitter.Emit(events.New(events.TypeVisitorAdmitted, room, id, nil))
 	}
 
-	if len(res.Admitted) > 0 || len(res.Abandoned) > 0 || len(res.Expired) > 0 {
+	if !res.Empty() {
 		d.log.Debug("anteroom: admission pass",
 			"room", room,
 			"admitted", len(res.Admitted),

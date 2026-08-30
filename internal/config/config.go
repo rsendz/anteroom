@@ -30,8 +30,6 @@ func (d *Duration) UnmarshalYAML(node *yaml.Node) error {
 	return nil
 }
 
-func (d Duration) MarshalYAML() (any, error) { return time.Duration(d).String(), nil }
-
 func (d Duration) Std() time.Duration { return time.Duration(d) }
 
 // Timestamp is an RFC 3339 instant, e.g. 2026-11-20T10:00:00Z. A zero value
@@ -52,13 +50,6 @@ func (t *Timestamp) UnmarshalYAML(node *yaml.Node) error {
 	}
 	t.Time = parsed
 	return nil
-}
-
-func (t Timestamp) MarshalYAML() (any, error) {
-	if t.IsZero() {
-		return nil, nil
-	}
-	return t.Format(time.RFC3339), nil
 }
 
 // Schedule opens a room at a fixed time, which is what a ticket sale or a
