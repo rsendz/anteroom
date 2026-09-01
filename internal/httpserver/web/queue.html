@@ -43,7 +43,7 @@
   </p>
   <p class="countdown" data-role="countdown">&#8212;</p>
 
-  <p class="eta" data-role="eta">
+  <p class="eta" data-role="eta" role="status">
     {{if .Waiting}}{{.Waiting}} already in{{end}}
   </p>
 
@@ -62,7 +62,10 @@
     <span class="board__plain">{{if .Position}}{{.Position}}{{else}}&#8212;{{end}}</span>
   </div>
 
-  <p class="eta" data-role="eta">
+  <!-- A live region: these lines are the only notice a visitor gets that
+       admissions paused, that they are next, or that the room has closed, and
+       they are replaced by script without the page reloading. -->
+  <p class="eta" data-role="eta" role="status">
     {{if eq .Phase "closed"}}This room has closed.
     {{else if .Paused}}Admissions are paused. You keep your place.
     {{else if eq .Position 1}}You're next.
@@ -78,7 +81,7 @@
   </p>
   {{end}}
 
-  <p class="notice" data-role="notice" {{if not .Degraded}}hidden{{end}}>
+  <p class="notice" data-role="notice" role="status" {{if not .Degraded}}hidden{{end}}>
     We can't reach the queue right now. Your place is held — this page keeps trying.
   </p>
 

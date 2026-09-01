@@ -16,7 +16,10 @@
   --leaf-edge: #2c3f3a;
   --bone: #e8e2d4;
   --brass: #c9a227;
-  --muted: #7c8a86;
+  /* Light enough to clear 4.5:1 against the top of the body gradient, not
+     just against the flat hall colour behind the rest of the page. The muted
+     text is set at 10-11px, where the difference is the whole legibility. */
+  --muted: #96a7a2;
 
   --board: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
   --prose: ui-serif, Georgia, "Iowan Old Style", "Times New Roman", serif;
@@ -103,9 +106,30 @@ body {
 .board {
   display: flex;
   justify-content: center;
+  transition: opacity 0.4s ease;
+}
+
+/* The flaps sit in their own element so the board itself can carry the live
+   region, with the announced text as a sibling the flaps cannot drown out. */
+.board__flaps {
+  display: flex;
+  justify-content: center;
   gap: 0.4rem;
   perspective: 700px;
-  transition: opacity 0.4s ease;
+}
+
+/* Announced to screen readers in place of the flaps, which spell the number
+   out one card at a time and read as nonsense. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 .board--through {

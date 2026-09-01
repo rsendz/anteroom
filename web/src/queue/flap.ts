@@ -9,6 +9,8 @@ const FLIP_MS = 260;
 
 export class FlapBoard {
   private readonly root: HTMLElement;
+  private readonly flaps: HTMLElement;
+  private readonly label: HTMLElement;
   private readonly digits: FlapDigit[] = [];
   private width: number;
   private value = -1;
@@ -17,8 +19,18 @@ export class FlapBoard {
   constructor(root: HTMLElement, minWidth = 2) {
     this.root = root;
     this.width = minWidth;
-    // Clear the server-rendered number this display is taking over from.
-    this.root.replaceChildren();
+
+    // The live region announces the hidden label, not the flaps. An
+    // aria-label on the region itself would override its own contents, which
+    // stops the change being announced at all in some screen readers; and the
+    // flaps hold each digit twice, once per half of the card, so unhidden
+    // they read "1 1" rather than "1".
+    this.flaps = element("div", "board__flaps");
+    this.flaps.setAttribute("aria-hidden", "true");
+    this.label = element("span", "visually-hidden");
+
+    // Replaces the server-rendered number this display is taking over from.
+    this.root.replaceChildren(this.flaps, this.label);
     this.root.setAttribute("role", "status");
     this.root.setAttribute("aria-live", "polite");
     this.setWidth(minWidth);
@@ -36,14 +48,14 @@ export class FlapBoard {
     }
     this.value = next;
     // Screen readers get the number as a number, not as separate flaps.
-    this.root.setAttribute("aria-label", `Position ${text} in line`);
+    this.label.textContent = `Position ${text} in line`;
   }
 
   private setWidth(width: number): void {
     while (this.digits.length < width) {
       const digit = new FlapDigit();
       // Prepend, so growing past a power of ten adds a leading flap.
-      this.root.prepend(digit.el);
+      this.flaps.prepend(digit.el);
       this.digits.unshift(digit);
     }
     this.width = width;
