@@ -8,6 +8,7 @@
  */
 import { FlapBoard } from "./flap";
 import { Countdown } from "./countdown";
+import { format, formatWait } from "./format";
 import type { Phase } from "../shared";
 import "./queue.css";
 
@@ -184,22 +185,6 @@ function requireEl(root: ParentNode, selector: string): HTMLElement {
   const el = root.querySelector<HTMLElement>(selector);
   if (!el) throw new Error(`anteroom: missing element ${selector}`);
   return el;
-}
-
-/** Rounds a wait to something a person would actually say out loud. */
-export function formatWait(seconds: number): string {
-  if (seconds < 60) {
-    const rounded = Math.max(5, Math.ceil(seconds / 5) * 5);
-    return `${rounded} seconds`;
-  }
-  const minutes = Math.ceil(seconds / 60);
-  if (minutes < 60) return minutes === 1 ? "a minute" : `${minutes} minutes`;
-  const hours = Math.round(minutes / 6) / 10;
-  return hours === 1 ? "an hour" : `${hours} hours`;
-}
-
-function format(n: number): string {
-  return n.toLocaleString();
 }
 
 main();
