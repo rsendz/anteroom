@@ -12,8 +12,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/luisresendez/anteroom/internal/events"
-	"github.com/luisresendez/anteroom/internal/queue"
+	"github.com/rsendz/anteroom/internal/events"
+	"github.com/rsendz/anteroom/internal/queue"
 )
 
 // admitter is the one thing the loop needs from the queue store. Declaring it

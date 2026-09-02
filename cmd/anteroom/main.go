@@ -21,11 +21,11 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/luisresendez/anteroom/internal/admit"
-	"github.com/luisresendez/anteroom/internal/config"
-	"github.com/luisresendez/anteroom/internal/events"
-	"github.com/luisresendez/anteroom/internal/httpserver"
-	"github.com/luisresendez/anteroom/internal/queue"
+	"github.com/rsendz/anteroom/internal/admit"
+	"github.com/rsendz/anteroom/internal/config"
+	"github.com/rsendz/anteroom/internal/events"
+	"github.com/rsendz/anteroom/internal/httpserver"
+	"github.com/rsendz/anteroom/internal/queue"
 )
 
 // version is stamped at build time by the Makefile and the Dockerfile. A

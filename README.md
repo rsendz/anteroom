@@ -1,7 +1,7 @@
 # anteroom
 
-[![check](https://github.com/luisresendez/anteroom/actions/workflows/ci.yml/badge.svg)](https://github.com/luisresendez/anteroom/actions/workflows/ci.yml)
-[![Go Reference](https://pkg.go.dev/badge/github.com/luisresendez/anteroom.svg)](https://pkg.go.dev/github.com/luisresendez/anteroom)
+[![check](https://github.com/rsendz/anteroom/actions/workflows/ci.yml/badge.svg)](https://github.com/rsendz/anteroom/actions/workflows/ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/rsendz/anteroom.svg)](https://pkg.go.dev/github.com/rsendz/anteroom)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 A self-hosted virtual waiting room. Put it in front of a page that's about to
@@ -42,7 +42,7 @@ token is `demo-admin-token`.
 ## Install
 
 ```sh
-go install github.com/luisresendez/anteroom/cmd/anteroom@latest
+go install github.com/rsendz/anteroom/cmd/anteroom@latest
 ```
 
 That builds without the front-end assets, so anteroom serves a plain waiting
@@ -52,7 +52,7 @@ back to its API. It is a real waiting room, just not the animated one.
 For the split-flap board and the dashboard, build the front-end in:
 
 ```sh
-git clone https://github.com/luisresendez/anteroom && cd anteroom
+git clone https://github.com/rsendz/anteroom && cd anteroom
 make build       # front-end, then bin/anteroom
 ```
 

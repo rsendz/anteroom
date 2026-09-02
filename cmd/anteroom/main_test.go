@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/luisresendez/anteroom/internal/config"
+	"github.com/rsendz/anteroom/internal/config"
 )
 
 func discardLogger() *slog.Logger {

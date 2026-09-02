@@ -1,4 +1,4 @@
-module github.com/luisresendez/anteroom
+module github.com/rsendz/anteroom
 
 go 1.24
 

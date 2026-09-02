@@ -7,8 +7,8 @@ import (
 	"slices"
 	"time"
 
-	"github.com/luisresendez/anteroom/internal/events"
-	"github.com/luisresendez/anteroom/internal/queue"
+	"github.com/rsendz/anteroom/internal/events"
+	"github.com/rsendz/anteroom/internal/queue"
 )
 
 func (s *Server) registerAdmin(mux *http.ServeMux) {

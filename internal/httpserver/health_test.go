@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/luisresendez/anteroom/internal/config"
-	"github.com/luisresendez/anteroom/internal/events"
+	"github.com/rsendz/anteroom/internal/config"
+	"github.com/rsendz/anteroom/internal/events"
 )
 
 func TestFailOpenIsOffByDefault(t *testing.T) {

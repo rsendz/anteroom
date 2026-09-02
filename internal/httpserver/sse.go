@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/luisresendez/anteroom/internal/token"
+	"github.com/rsendz/anteroom/internal/token"
 )
 
 // positionUpdate is the payload the waiting page renders from.

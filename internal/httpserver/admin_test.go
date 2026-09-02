@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/luisresendez/anteroom/internal/config"
-	"github.com/luisresendez/anteroom/internal/events"
-	"github.com/luisresendez/anteroom/internal/queue"
-	"github.com/luisresendez/anteroom/internal/token"
+	"github.com/rsendz/anteroom/internal/config"
+	"github.com/rsendz/anteroom/internal/events"
+	"github.com/rsendz/anteroom/internal/queue"
+	"github.com/rsendz/anteroom/internal/token"
 )
 
 // do issues an arbitrary method request against the harness.

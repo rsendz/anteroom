@@ -4,7 +4,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/luisresendez/anteroom/internal/events"
+	"github.com/rsendz/anteroom/internal/events"
 )
 
 // queueHealth tracks whether the queue store is answering, and decides when an
