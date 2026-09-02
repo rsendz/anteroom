@@ -1,0 +1,35 @@
+# `make check` is the whole build gate: race tests, vet, gofmt, the TypeScript
+# type-check and the front-end tests. CI runs exactly what a contributor runs
+# locally, so a green tick here means the same thing as a green run there.
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: make check
+
+      # Proves the documented fallback still holds: a plain `go build`, with no
+      # front-end assets present, must still produce a working binary.
+      - name: build without the front-end
+        run: |
+          make clean
+          go build ./cmd/anteroom
