@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"syscall"
 	"time"
 
@@ -26,6 +27,11 @@ import (
 	"github.com/luisresendez/anteroom/internal/httpserver"
 	"github.com/luisresendez/anteroom/internal/queue"
 )
+
+// version is stamped at build time by the Makefile and the Dockerfile. A
+// binary built by a plain `go build` reports the module's own version when it
+// was installed with `go install`, and "dev" otherwise.
+var version = "dev"
 
 func main() {
 	err := run(os.Args[1:])
@@ -51,17 +57,22 @@ func run(args []string) error {
 		fs.PrintDefaults()
 	}
 	var (
-		configPath = fs.String("config", "", "path to anteroom.yaml (omit to configure from flags)")
-		origin     = fs.String("origin", "", "origin to protect, e.g. http://localhost:3000 (single-room mode)")
-		rate       = fs.Float64("rate", config.DefaultRate, "visitors admitted per second (single-room mode)")
-		maxActive  = fs.Int("max-active", config.DefaultMaxActive, "visitors allowed on the site at once (single-room mode)")
-		listen     = fs.String("listen", "", "address to listen on (overrides the config file)")
-		reseed     = fs.Bool("reseed", false, "overwrite live room settings with the ones in the config file")
-		failOpen   = fs.Bool("fail-open", false, "let visitors through unchecked if the queue store stays unreachable")
-		verbose    = fs.Bool("v", false, "log every admission pass")
+		configPath  = fs.String("config", "", "path to anteroom.yaml (omit to configure from flags)")
+		origin      = fs.String("origin", "", "origin to protect, e.g. http://localhost:3000 (single-room mode)")
+		rate        = fs.Float64("rate", config.DefaultRate, "visitors admitted per second (single-room mode)")
+		maxActive   = fs.Int("max-active", config.DefaultMaxActive, "visitors allowed on the site at once (single-room mode)")
+		listen      = fs.String("listen", "", "address to listen on (overrides the config file)")
+		reseed      = fs.Bool("reseed", false, "overwrite live room settings with the ones in the config file")
+		failOpen    = fs.Bool("fail-open", false, "let visitors through unchecked if the queue store stays unreachable")
+		verbose     = fs.Bool("v", false, "log every admission pass")
+		showVersion = fs.Bool("version", false, "print the version and exit")
 	)
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *showVersion {
+		fmt.Println("anteroom " + buildVersion())
+		return nil
 	}
 
 	level := slog.LevelInfo
@@ -131,6 +142,19 @@ const usage = `anteroom — a self-hosted virtual waiting room.
 
 Flags:
 `
+
+// buildVersion prefers the stamped version, falling back to what the module
+// system recorded. `go install ...@v0.1.0` stamps nothing, but Go still knows
+// which version it built, so the binary can answer for itself either way.
+func buildVersion() string {
+	if version != "dev" {
+		return version
+	}
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return info.Main.Version
+	}
+	return version
+}
 
 func loadConfig(path, origin string, rate float64, maxActive int, log *slog.Logger) (config.Config, error) {
 	if path != "" {

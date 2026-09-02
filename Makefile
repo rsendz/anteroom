@@ -1,4 +1,6 @@
 BINARY := bin/anteroom
+VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+LDFLAGS := -X main.version=$(VERSION)
 
 .PHONY: help
 help:
@@ -15,7 +17,7 @@ help:
 # The front-end is embedded in the binary, so it has to exist before `go build`.
 .PHONY: build
 build: web
-	go build -o $(BINARY) ./cmd/anteroom
+	go build -ldflags "$(LDFLAGS)" -o $(BINARY) ./cmd/anteroom
 
 .PHONY: web
 web: web/node_modules

@@ -10,11 +10,12 @@ RUN npm run build
 
 FROM golang:1.24-alpine AS build
 WORKDIR /src
+ARG VERSION=dev
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=web /src/internal/httpserver/web/static/ ./internal/httpserver/web/static/
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/anteroom ./cmd/anteroom
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /out/anteroom ./cmd/anteroom
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/demo-origin ./cmd/demo-origin
 
 FROM gcr.io/distroless/static-debian12:nonroot AS anteroom

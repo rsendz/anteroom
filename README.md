@@ -1,5 +1,9 @@
 # anteroom
 
+[![check](https://github.com/luisresendez/anteroom/actions/workflows/ci.yml/badge.svg)](https://github.com/luisresendez/anteroom/actions/workflows/ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/luisresendez/anteroom.svg)](https://pkg.go.dev/github.com/luisresendez/anteroom)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A self-hosted virtual waiting room. Put it in front of a page that's about to
 get more traffic than it can take, and instead of the page falling over,
 visitors see a fair queue with their position and are let through at a rate the
@@ -34,6 +38,31 @@ Open a second browser (or a private window) to get in line behind yourself.
 
 The control room is at <http://localhost:8080/__anteroom/admin/> — the demo
 token is `demo-admin-token`.
+
+## Install
+
+```sh
+go install github.com/luisresendez/anteroom/cmd/anteroom@latest
+```
+
+That builds without the front-end assets, so anteroom serves a plain waiting
+page that shows the position and refreshes itself, and the control room falls
+back to its API. It is a real waiting room, just not the animated one.
+
+For the split-flap board and the dashboard, build the front-end in:
+
+```sh
+git clone https://github.com/luisresendez/anteroom && cd anteroom
+make build       # front-end, then bin/anteroom
+```
+
+Or run the image, which has both built in:
+
+```sh
+docker build -f deploy/Dockerfile --target anteroom -t anteroom .
+```
+
+`anteroom --version` reports which build you have.
 
 ## Put it in front of your own site
 
@@ -233,8 +262,10 @@ The front-end is embedded in the binary, so it's built first:
 ```sh
 make build     # front-end, then the Go binary, into bin/anteroom
 make test      # go test ./... -race
-make check     # tests, vet, gofmt, and the TypeScript type-check
+make check     # tests, vet, gofmt, and the front-end type-check and tests
 ```
+
+`make check` is what CI runs, so a green run locally means a green run there.
 
 `go build ./cmd/anteroom` on its own works too — without the front-end assets
 it serves a plain waiting page that still shows the position and refreshes
@@ -255,3 +286,7 @@ itself.
 
 Metrics export (the room snapshot is the natural place to add it), TLS,
 path-based room matching, and any client SDK — anteroom is a proxy on purpose.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
