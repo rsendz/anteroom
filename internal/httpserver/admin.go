@@ -20,6 +20,9 @@ func (s *Server) registerAdmin(mux *http.ServeMux) {
 	mux.Handle("GET "+api+"status", guard(func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, s.health.status())
 	}))
+	// Behind the token like everything else under admin/api: queue depth during
+	// a drop is exactly what someone gaming it wants to know.
+	mux.Handle("GET "+api+"metrics", guard(s.handleMetrics))
 	mux.Handle("GET "+api+"rooms", guard(s.handleListRooms))
 	mux.Handle("GET "+api+"rooms/{room}/stats", guard(s.handleRoomStats))
 	mux.Handle("PUT "+api+"rooms/{room}/config", guard(s.handleSetConfig))
