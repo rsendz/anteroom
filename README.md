@@ -132,6 +132,41 @@ If anteroom runs behind a load balancer you **must** list it in
 the balancer, and they all share one budget. See
 [docs/production.md](docs/production.md).
 
+## What it holds
+
+Measured, not estimated. These come from `loadtest/`, on one M1 laptop (8
+cores, 8 GB) with Redis 7.4 in Docker and everything talking over loopback:
+
+| | Measured |
+| --- | --- |
+| Queue depth | **1,000,000** waiting visitors |
+| Memory at that depth | 229 MiB of Redis, and 62 MiB of anteroom |
+| Joins | **19,000 a second** sustained, p50 24 ms, p99 48 ms |
+| Admissions | **20,000 a second**, within 0.2% of the configured rate |
+| Three replicas, one budget | 1,000 a second configured, 1,012 observed |
+| Held position streams | 9,500 at once, p99 page load 1.1 ms |
+
+Three of those are worth a word.
+
+**Anteroom holds 62 MiB with a million people queued**, because it keeps no
+queue of its own. The queue is in Redis, which is what lets you run several
+replicas and restart any of them mid-spike.
+
+**The rate is a real limit, not a target.** Over a 60 second window at a
+configured 1,000 a second, exactly 60,000 were admitted. The admission
+counter and the drop in queue depth agree to the visitor, so the number is
+not an artifact of where it was read.
+
+**Three replicas sharing one Redis admitted 1,012 a second, not 3,000.** That
+is the atomic Lua script doing its job: replicas cannot double-admit or
+jointly exceed the rate.
+
+The ceiling on held streams is this laptop, not anteroom: macOS caps a
+process at 10,240 descriptors, and anteroom logs `too many open files` and
+keeps serving rather than falling over. At roughly 28 KB per held stream, the
+constraint on a real box is descriptors and memory, in that order. See
+[loadtest/README.md](loadtest/README.md) to run it yourself.
+
 ## Scheduled drops
 
 For a sale that starts at a fixed time, a room can open on a schedule:
