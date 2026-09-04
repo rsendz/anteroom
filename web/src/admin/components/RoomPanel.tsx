@@ -196,10 +196,12 @@ function RateForm({
         <span className="field__label">Let in per second</span>
         <input
           className="field__input"
+          name="rate"
           type="number"
           min="0.1"
           step="0.1"
           value={rate}
+          autoComplete="off"
           onChange={(e) => setRate(e.target.value)}
         />
       </label>
@@ -207,10 +209,12 @@ function RateForm({
         <span className="field__label">Allowed on the site</span>
         <input
           className="field__input"
+          name="max_active"
           type="number"
           min="1"
           step="1"
           value={maxActive}
+          autoComplete="off"
           onChange={(e) => setMaxActive(e.target.value)}
         />
       </label>
