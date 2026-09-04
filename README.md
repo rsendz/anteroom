@@ -10,7 +10,7 @@ visitors see a fair queue with their position and are let through at a rate the
 site can actually handle.
 
 <p align="center">
-  <img src="docs/images/waiting.png" alt="The anteroom waiting page: a split-flap board showing position 782 of 782 waiting, with an estimated wait of about 5 minutes." width="620">
+  <img src="docs/images/waiting.png" alt="The anteroom waiting page: a split-flap board showing position 1,102 of 1,102 waiting, with an estimated wait of about 7 minutes." width="820">
 </p>
 
 ```
@@ -19,7 +19,7 @@ visitors ──▶ anteroom ──▶ your site
                 └─▶ waiting page: position, estimated wait, live updates
 ```
 
-Anteroom is a reverse proxy, so the site behind it needs no changes at all —
+Anteroom is a reverse proxy, so the site behind it needs no changes at all:
 no SDK, no middleware, no code.
 
 The number on the board physically turns over as the queue moves. That is the
@@ -36,8 +36,19 @@ Open <http://localhost:8080>. The demo admits one visitor every two seconds
 with a limit of three on the site at once, so you can watch the queue work.
 Open a second browser (or a private window) to get in line behind yourself.
 
-The control room is at <http://localhost:8080/__anteroom/admin/> — the demo
+The control room is at <http://localhost:8080/__anteroom/admin/>. The demo
 token is `demo-admin-token`.
+
+## Who this is for
+
+Anyone who runs their own edge: a VPS, a container host, Kubernetes, a box
+under a desk. Anteroom is one binary and a Redis, and it needs to be the thing
+your traffic arrives at.
+
+It cannot run *on* a serverless platform (Vercel, Netlify, Workers) because
+it is a long-lived process that holds a queue, not a function. It can happily
+sit in **front** of an origin hosted there, but that means running a server of
+your own and pointing DNS at it, which is a trade worth making deliberately.
 
 ## Install
 
@@ -90,10 +101,10 @@ the back of the queue.
 
 A visitor is let through only when **both** limits allow it:
 
-- **Rate** — a token bucket admits `rate` visitors per second. Burst is capped
+- **Rate.** A token bucket admits `rate` visitors per second. Burst is capped
   at one second's worth, so a pause or an outage can't dump the queue on your
   origin all at once.
-- **Concurrency** — at most `max_active` visitors may be on the site at any
+- **Concurrency.** At most `max_active` visitors may be on the site at any
   time. A session is reclaimed after `session_ttl` without a request, and its
   slot goes to the next person in line.
 
@@ -111,9 +122,10 @@ back, they rejoin at the end.
 
 **Bot resistance.** Each address may add only so many visitors to the queue per
 minute (`join_limit_per_ip`, 120 by default), which stops a script taking
-thousands of places. Anyone over the limit gets a 429. Keep it generous —
-office and mobile networks put many real people behind one address — and watch
-`total_refused` on the dashboard, which is the signal that it's too tight.
+thousands of places. Anyone over the limit gets a 429. Keep it generous,
+because office and mobile networks put many real people behind one address,
+and watch `total_refused` on the dashboard, which is the signal that it's too
+tight.
 
 If anteroom runs behind a load balancer you **must** list it in
 `trusted_proxies`, or `X-Forwarded-For` is ignored, every visitor looks like
@@ -142,7 +154,7 @@ admissions happen, though visitors already on the site keep their sessions.
 With `lottery: true`, everyone collected before the doors open gets a place
 drawn from their identity rather than their arrival time, **so turning up early
 gains nothing**. The place is derived by hashing, not randomly assigned, which
-means leaving and rejoining lands on the same number — there's no point
+means leaving and rejoining lands on the same number, so there's no point
 rerolling. Anyone arriving after the doors open queues behind the whole draw.
 
 During the draw the page shows a countdown and how many have entered, not a
@@ -150,7 +162,7 @@ position: a position would either shuffle as others join (which reads as
 broken) or reward whoever refreshed earliest.
 
 <p align="center">
-  <img src="docs/images/draw.png" alt="A scheduled room before its doors open: a countdown reading 7:04, 1,402 people already in, and a note that arriving early doesn't improve your chances." width="620">
+  <img src="docs/images/draw.png" alt="A scheduled room before its doors open: a countdown reading 6:40, 1,808 people already in, and a note that arriving early doesn't improve your chances." width="820">
 </p>
 
 ## Rooms
@@ -178,7 +190,7 @@ own queue, rate, cap, and counters; nothing crosses between them.
 
 ## The waiting page
 
-Server-rendered, then updated over Server-Sent Events — one Redis read per
+Server-rendered, then updated over Server-Sent Events: one Redis read per
 waiting visitor every two seconds, no matter how impatient they are. If the
 stream drops, the page falls back to reloading itself on a jittered timer so a
 crowd doesn't return in lockstep. With no JavaScript at all, a `meta refresh`
@@ -203,12 +215,12 @@ Try `docker compose stop kafka` against the demo and watch the queue carry on.
 ## The control room
 
 Every room's counters, a sparkline of queue depth, and the controls that matter
-during an incident — rate, concurrency, pause, and emptying the queue — at
+during an incident (rate, concurrency, pause, and emptying the queue) at
 `/__anteroom/admin/`. Changes take effect on the next admission pass, without a
 restart.
 
 <p align="center">
-  <img src="docs/images/dashboard.png" alt="The anteroom control room showing two rooms: shop admitting with 782 waiting and a draining sparkline, and tickets in its draw window with doors opening in 8 minutes." width="820">
+  <img src="docs/images/dashboard.png" alt="The anteroom control room showing two rooms: shop admitting with 1,242 waiting, 99 of 100 on the site and a draining sparkline, and tickets below it drawing for places with 1,807 waiting and doors opening in 7 minutes." width="820">
 </p>
 
 ## Admin API
@@ -218,6 +230,7 @@ All endpoints need `Authorization: Bearer <admin_token>`.
 | Method | Path | Does |
 | --- | --- | --- |
 | `GET` | `/__anteroom/admin/api/status` | Queue health; answers even when Redis is down |
+| `GET` | `/__anteroom/admin/api/metrics` | Every room in the Prometheus text format |
 | `GET` | `/__anteroom/admin/api/rooms` | Every room with its counters |
 | `GET` | `/__anteroom/admin/api/rooms/{room}/stats` | One room's counters |
 | `PUT` | `/__anteroom/admin/api/rooms/{room}/config` | Change `rate`, `max_active`, `session_ttl_secs`, `abandon_after_secs` |
@@ -234,6 +247,15 @@ curl -X PUT -H "Authorization: Bearer $TOKEN" \
 
 `GET /__anteroom/healthz` needs no token.
 
+**Metrics.** `admin/api/metrics` is Prometheus exposition format: queue depth,
+what's on the site, and the running totals, labelled by room, plus whether the
+queue store is answering. It reads the same one-second statistics cache the
+waiting page does, so scraping it costs no Redis round trip and it keeps
+reporting the last known numbers through an outage. It sits behind the admin
+token like everything else under `admin/api/`, because queue depth during a
+drop is exactly what someone gaming it wants to know; see
+[docs/production.md](docs/production.md) for the scrape config.
+
 Runtime settings live in Redis, not the config file, so a change you make here
 survives a restart. Anteroom logs a warning when the live values differ from
 the file; start it with `--reseed` to make the file win.
@@ -243,7 +265,7 @@ the file; start it with `--reseed` to make the file win.
 - Anteroom reserves the URL prefix `/__anteroom/` for itself. Nothing under it
   is ever proxied. Everything else belongs to your site.
 - **If Redis is unreachable, nobody is admitted.** Waiting visitors are held on
-  the page and let in when it recovers — no restart needed. Waving everyone
+  the page and let in when it recovers, with no restart needed. Waving everyone
   through would hand your origin the exact spike anteroom is there to prevent.
   If you'd rather serve the site unprotected than serve nobody, set
   `fail_open: true`; anteroom then proxies everyone through, but only after
@@ -267,7 +289,7 @@ make check     # tests, vet, gofmt, and the front-end type-check and tests
 
 `make check` is what CI runs, so a green run locally means a green run there.
 
-`go build ./cmd/anteroom` on its own works too — without the front-end assets
+`go build ./cmd/anteroom` on its own works too. Without the front-end assets
 it serves a plain waiting page that still shows the position and refreshes
 itself.
 
@@ -275,7 +297,7 @@ itself.
 
 | Path | What's in it |
 | --- | --- |
-| `internal/queue` | Redis data model and the Lua admission script — the correctness core |
+| `internal/queue` | Redis data model and the Lua admission script, the correctness core |
 | `internal/admit` | The background loop that runs admissions |
 | `internal/httpserver` | Routing, the proxy, the waiting page, SSE, the admin API |
 | `internal/token` | The signed visitor cookie |
@@ -284,9 +306,11 @@ itself.
 
 ## Not included
 
-Metrics export (the room snapshot is the natural place to add it), TLS,
-path-based room matching, and any client SDK — anteroom is a proxy on purpose.
+TLS, path-based room matching, and any client SDK. Anteroom is a proxy on
+purpose. Rooms are matched by host, so a room is a whole site rather than one
+route; that keeps the awkward cases (assets and API calls on other paths, and
+the ways round a gated path) from existing at all.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).

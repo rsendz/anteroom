@@ -14,9 +14,15 @@ DNS / CDN ──▶ your load balancer (TLS) ──▶ anteroom ──▶ your o
 Anteroom does not terminate TLS. Put it behind whatever already does, and set
 `secure_cookies: true` so the visitor cookie is only sent over HTTPS.
 
-If you cannot put a proxy in front of your site — managed platforms like
-Vercel, Netlify and Cloudflare Pages own the edge — anteroom in this form does
-not fit. You would need to move ingress somewhere you control.
+This matters twice over for `/__anteroom/admin/`. The admin token is sent as an
+`Authorization` header on every request the dashboard and every scrape make, so
+anything that can read the connection can take the token and then reconfigure
+or empty your queues. Reach the control room over HTTPS only, and if the
+balancer can restrict that path to your own network, do that too.
+
+If you cannot put a proxy in front of your site (managed platforms like
+Vercel, Netlify and Cloudflare Pages own the edge) then anteroom in this form
+does not fit. You would need to move ingress somewhere you control.
 
 ### nginx
 
@@ -46,8 +52,8 @@ server {
 
 Point a target group at anteroom's port with a health check on
 `/__anteroom/healthz`. Raise the idle timeout well above the default 60
-seconds — position streams are long-lived connections and every drop turns
-into a page reload from a visitor who is already waiting.
+seconds, because position streams are long-lived connections and every drop
+turns into a page reload from a visitor who is already waiting.
 
 ### Telling anteroom what is in front of it
 
@@ -64,7 +70,7 @@ share one rate-limit budget, and the limit throttles your entire site at once.
 
 Anteroom logs a warning when it sees forwarded headers from a peer it was not
 told to trust. Do not ignore it. Include IPv6 loopback if your balancer or
-health checks connect that way — it is the easiest one to miss.
+health checks connect that way, and it is the easiest one to miss.
 
 ## Redis
 
@@ -75,7 +81,7 @@ The queue lives in Redis, so Redis availability is anteroom's availability.
 production, enable AOF. Without it, a Redis restart loses every position and
 everyone who has been waiting twenty minutes goes to the back of the line.
 
-**Run it highly available** — managed Redis, Sentinel, or Cluster. Anteroom
+**Run it highly available:** managed Redis, Sentinel, or Cluster. Anteroom
 reconnects on its own and needs no restart when Redis comes back, but while it
 is gone nobody is admitted.
 
@@ -97,7 +103,7 @@ fail_open_after: 30s
 ```
 
 Anteroom then proxies visitors straight through, but only after the queue has
-been unreachable continuously for the grace period — a one-second blip
+been unreachable continuously for the grace period, so a one-second blip
 releases nobody. While it is happening it logs at `ERROR`, emits a
 `failing_open` event, and the dashboard shows an unmissable banner.
 `GET /__anteroom/admin/api/status` reports this without touching Redis, so it
@@ -159,3 +165,32 @@ your site depends on anteroom, so removing it needs no code change.
 
 `GET /__anteroom/healthz` needs no token and is the endpoint to point a
 load-balancer health check at.
+
+### Scraping the numbers
+
+Everything in that table is a series on `/__anteroom/admin/api/metrics`, in
+Prometheus exposition format and labelled by room:
+
+```yaml
+scrape_configs:
+  - job_name: anteroom
+    metrics_path: /__anteroom/admin/api/metrics
+    scheme: https
+    authorization:
+      credentials: <admin_token>     # or credentials_file, to keep it out of here
+    static_configs:
+      - targets: ["shop.example.com"]
+```
+
+`anteroom_waiting` and `anteroom_active` are gauges; the `_total` series are
+counters, so graph them with `rate()`. `anteroom_failing_open` is the one to
+alert on: it means anteroom is passing everyone through unchecked.
+
+Scrape every anteroom replica rather than one behind the balancer: the totals
+are shared in Redis and read the same everywhere, but health is per-process, so
+scraping one replica hides an unhealthy sibling.
+
+The control room also exports what one browser has seen: **Export CSV** on a
+room downloads its queue depth, sessions, and admissions since that tab was
+opened, which is the quick way to attach a picture of the queue to a
+post-mortem without standing up Prometheus first.
