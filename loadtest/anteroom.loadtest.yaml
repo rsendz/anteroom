@@ -1,0 +1,27 @@
+# Configuration for loadtest/. The limits are lifted out of the way on purpose:
+# this measures what anteroom and Redis can hold, not what a sensible room
+# would be configured to do.
+
+listen: "127.0.0.1:8099"
+cookie_secret: "loadtest-only-cookie-secret-not-a-real-one"
+admin_token: "loadtest-admin-token"
+secure_cookies: false
+
+redis:
+  addr: "127.0.0.1:6379"
+
+rooms:
+  bench:
+    origin: "http://127.0.0.1:9999"
+    rate: 1000
+    # High enough not to be the binding limit: the drain phase is measuring
+    # whether the rate is honoured, so concurrency must not cap it first.
+    max_active: 2000000
+    # Long, because a load test's visitors never send a heartbeat and would
+    # otherwise be abandoned out from under the measurement.
+    session_ttl: 2h
+    abandon_after: 2h
+    # Every visitor arrives from 127.0.0.1, so the per-address limit would
+    # refuse the entire run after the first 120.
+    join_limit_per_ip: 100000000
+    title: "The site is busy"

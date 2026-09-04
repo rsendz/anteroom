@@ -5,3 +5,6 @@ node_modules/
 # is build output; anteroom still runs without it, serving a plain waiting page.
 /internal/httpserver/web/static/assets/
 /internal/httpserver/web/static/manifest.json
+
+# Built by `cd loadtest && go build`. Build output, like bin/ above.
+/loadtest/loadtest
