@@ -4,27 +4,26 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<meta name="color-scheme" content="dark">
-<title>{{.Title}} — too many requests</title>
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f4f6f8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)">
+<title>{{.Title}} | Too many requests</title>
 {{range .Styles}}<link rel="stylesheet" href="{{.}}">
 {{end}}</head>
 <body>
 <main id="anteroom">
-  <p class="sign">
-    <span class="sign__rule"></span>
-    <span class="sign__mark">&#9679;</span>
-    <span>{{.Title}}</span>
-    <span class="sign__rule"></span>
-  </p>
+  <header class="queue-intro">
+    <h1 class="room-title">Too many at once</h1>
+  </header>
 
-  <h1 class="room-title">Too many at once</h1>
+  <section class="queue-stage" aria-label="Request status">
+    <p class="eta">A lot of requests are arriving from your network.</p>
 
-  <p class="eta">A lot of requests are arriving from your network.</p>
-
-  <p class="reassurance">
-    Wait a minute and try again. If you are on an office or campus network,
-    someone nearby may be using the same connection.
-  </p>
+    <p class="reassurance">
+      Wait a minute and try again. If you are on an office or campus network,
+      someone nearby may be using the same connection.
+    </p>
+  </section>
 </main>
 </body>
 </html>

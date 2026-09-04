@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <meta name="color-scheme" content="light dark">
-<title>{{.Title}} — you're in line</title>
+<meta name="theme-color" content="#f5f6f8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101216" media="(prefers-color-scheme: dark)">
+<title>{{.Title}} | You're in line</title>
 {{if .PlainRefresh}}<meta http-equiv="refresh" content="{{.RefreshSeconds}}">
 {{else}}<noscript><meta http-equiv="refresh" content="{{.RefreshSeconds}}"></noscript>
 {{end}}{{range .Styles}}<link rel="stylesheet" href="{{.}}">
@@ -24,15 +26,12 @@
       data-admits-at="{{.AdmitsAtMS}}"
       data-now="{{.NowMS}}">
 
-  <p class="sign">
-    <span class="sign__rule"></span>
-    <span class="sign__mark">&#9679;</span>
-    <span>{{.Room}}</span>
-    <span class="sign__rule"></span>
-  </p>
+  <header class="queue-intro">
+    <h1 class="room-title">{{.Title}}</h1>
+    {{if .Message}}<p class="room-message">{{.Message}}</p>{{end}}
+  </header>
 
-  <h1 class="room-title">{{.Title}}</h1>
-  {{if .Message}}<p class="room-message">{{.Message}}</p>{{end}}
+  <section class="queue-stage" aria-label="Queue status">
 
   {{if or (eq .Phase "draw") (eq .Phase "before")}}
   <!-- Before the doors open nobody has a place, so the page shows how long is
@@ -41,7 +40,7 @@
   <p class="board-label">
     {{if eq .Phase "before"}}The queue opens in{{else}}Doors open in{{end}}
   </p>
-  <p class="countdown" data-role="countdown">&#8212;</p>
+  <p class="countdown" data-role="countdown">&hellip;</p>
 
   <p class="eta" data-role="eta" role="status">
     {{if .Waiting}}{{.Waiting}} already in{{end}}
@@ -52,14 +51,14 @@
     line, so arriving early doesn't improve your chances. Keep this page open
     and it will take you through when the doors open.
     {{else}}Keep this page open. You'll go through automatically when the
-    doors open — there's no need to reload.{{end}}
+    doors open. There's no need to reload.{{end}}
   </p>
   {{else}}
   <p class="board-label">Your position</p>
   <!-- The number is rendered here too, so a visitor whose scripts never
        arrive still sees where they stand. The board replaces it on load. -->
   <div class="board" data-role="board">
-    <span class="board__plain">{{if .Position}}{{.Position}}{{else}}&#8212;{{end}}</span>
+    <span class="board__plain">{{if .Position}}{{.Position}}{{else}}&hellip;{{end}}</span>
   </div>
 
   <!-- A live region: these lines are the only notice a visitor gets that
@@ -67,7 +66,7 @@
        they are replaced by script without the page reloading. -->
   <p class="eta" data-role="eta" role="status">
     {{if eq .Phase "closed"}}This room has closed.
-    {{else if .Paused}}Admissions are paused. You keep your place.
+    {{else if .Paused}}The line is paused. Your place is saved.
     {{else if eq .Position 1}}You're next.
     {{else if .ETASeconds}}About {{.ETAText}} to go.
     {{else}}Working out how long this will take.{{end}}
@@ -77,12 +76,12 @@
     {{if eq .Phase "closed"}}Nobody new is being let in. If you were already
     on the site, your session is still yours.
     {{else}}Your place is held. Leave this page open and you'll go through
-    automatically — there's no need to reload.{{end}}
+    automatically. There's no need to reload.{{end}}
   </p>
   {{end}}
 
   <p class="notice" data-role="notice" role="status" {{if not .Degraded}}hidden{{end}}>
-    We can't reach the queue right now. Your place is held — this page keeps trying.
+    We can't reach the queue right now. Your place is held. This page keeps trying.
   </p>
 
   <p class="status-bar">
@@ -90,6 +89,7 @@
     <span class="status-bar__divider">&#183;</span>
     <span data-role="waiting">{{if and .Waiting (eq .Phase "queueing")}}{{.Waiting}} waiting{{end}}</span>
   </p>
+  </section>
 </main>
 {{range .Scripts}}<script type="module" src="{{.}}"></script>
 {{end}}</body>

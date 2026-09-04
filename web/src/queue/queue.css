@@ -1,38 +1,38 @@
 /*
- * A quiet, system-aware waiting room. The split-flap board stays dark in both
- * themes so the changing position remains Anteroom's single visual signature.
+ * A quiet wayfinding system: the introduction names the destination and the
+ * live stage shows progress. The split-flap board remains Anteroom's signature.
  */
 
 :root {
-  --canvas: #f5f6f8;
+  --canvas: #f4f6f8;
   --surface: #ffffff;
-  --surface-subtle: #eef1f4;
-  --ink: #17191d;
-  --muted: #606874;
-  --line: #d9dee5;
-  --accent: #2563eb;
-  --accent-soft: #e8f0ff;
-  --board-surface: #17191d;
-  --board-edge: #30343a;
+  --surface-subtle: #edf1f5;
+  --ink: #15181d;
+  --muted: #5f6875;
+  --line: #d6dce4;
+  --accent: #1f63e9;
+  --accent-soft: #e6efff;
+  --board-surface: #15181d;
+  --board-edge: #343942;
   --board-text: #f8fafc;
 
   --body: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --data: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --data: var(--body);
 
   color-scheme: light dark;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --canvas: #101216;
-    --surface: #181b20;
-    --surface-subtle: #22262d;
+    --canvas: #0e1116;
+    --surface: #181c22;
+    --surface-subtle: #20252d;
     --ink: #f3f5f7;
-    --muted: #a3abb7;
-    --line: #343a44;
-    --accent: #7ca9ff;
-    --accent-soft: #1c2c4b;
-    --board-surface: #08090b;
+    --muted: #a4adba;
+    --line: #353c47;
+    --accent: #78a8ff;
+    --accent-soft: #1a2c4d;
+    --board-surface: #080a0d;
   }
 }
 
@@ -46,7 +46,7 @@ body {
   min-height: 100vh;
   min-height: 100svh;
   margin: 0;
-  padding: clamp(1rem, 4vw, 3rem);
+  padding: clamp(1.25rem, 5vw, 4rem);
   display: grid;
   place-items: center;
   background: var(--canvas);
@@ -56,68 +56,64 @@ body {
 }
 
 #anteroom {
-  width: min(100%, 34rem);
-  padding: clamp(1.5rem, 6vw, 3.5rem);
-  text-align: center;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 1rem;
-  box-shadow: 0 1.25rem 3rem color-mix(in srgb, var(--ink) 8%, transparent);
-}
-
-.sign {
-  display: flex;
+  width: min(100%, 68rem);
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(22rem, 1.1fr);
   align-items: center;
-  justify-content: center;
-  gap: 0.6rem;
-  margin: 0;
-  color: var(--muted);
-  font-family: var(--data);
-  font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
+  gap: clamp(2.5rem, 8vw, 7rem);
 }
 
-.sign__mark {
-  width: 0.45rem;
-  height: 0.45rem;
-  overflow: hidden;
-  color: transparent;
-  background: var(--accent);
-  border-radius: 50%;
+.queue-intro {
+  position: relative;
+  padding-left: clamp(1.25rem, 3vw, 2rem);
+  text-align: left;
 }
 
-.sign__rule {
-  flex: 1;
-  height: 1px;
-  background: var(--line);
+.queue-intro::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 2px;
+  content: "";
+  background: linear-gradient(to bottom, var(--accent) 0 2.5rem, var(--line) 2.5rem 100%);
+  border-radius: 999px;
 }
 
 .room-title {
-  margin: 1.75rem 0 0;
-  font-size: clamp(1.75rem, 7vw, 2.5rem);
-  font-weight: 650;
-  letter-spacing: -0.04em;
-  line-height: 1.1;
+  max-width: 9ch;
+  margin: 1.5rem 0 0;
+  font-size: clamp(2.5rem, 6vw, 4.75rem);
+  font-weight: 680;
+  letter-spacing: -0.065em;
+  line-height: 0.98;
+  text-wrap: balance;
 }
 
 .room-message {
   max-width: 28rem;
-  margin: 0.75rem auto 0;
+  margin: 1.25rem 0 0;
   color: var(--muted);
-  font-size: 1rem;
-  line-height: 1.55;
+  font-size: clamp(1rem, 2vw, 1.125rem);
+  line-height: 1.65;
+}
+
+.queue-stage {
+  position: relative;
+  min-width: 0;
+  padding: clamp(2rem, 5vw, 3.75rem);
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 1.25rem;
+  box-shadow: 0 1.75rem 5rem color-mix(in srgb, var(--ink) 10%, transparent);
 }
 
 .board-label {
-  margin: 3rem 0 1rem;
+  margin: 0 0 1.25rem;
   color: var(--muted);
-  font-family: var(--data);
-  font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  font-family: var(--body);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .board {
@@ -126,18 +122,14 @@ body {
   transition: opacity 0.25s ease;
 }
 
-/* The flaps sit in their own element so the board itself can carry the live
-   region, with the announced text as a sibling the flaps cannot drown out. */
 .board__flaps {
   display: flex;
   justify-content: center;
-  gap: 0.5rem;
+  gap: 0.55rem;
   perspective: 700px;
   background: linear-gradient(var(--line), var(--line)) center / 100% 1px no-repeat;
 }
 
-/* Announced to screen readers in place of the flaps, which spell the number
-   out one card at a time and read as nonsense. */
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -155,30 +147,30 @@ body {
 }
 
 .board__plain {
-  padding: 0.65rem 1rem;
+  padding: 0.7rem 1.1rem;
   color: var(--ink);
   background: var(--surface-subtle);
   border-radius: 0.75rem;
   font-family: var(--data);
-  font-size: clamp(2.75rem, 14vw, 4.25rem);
+  font-size: clamp(3rem, 11vw, 4.75rem);
   font-weight: 650;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.06em;
 }
 
 .flap {
-  --flap-w: clamp(3.25rem, 17vw, 4.5rem);
-  --flap-h: calc(var(--flap-w) * 1.32);
+  --flap-w: clamp(3.6rem, 9vw, 5rem);
+  --flap-h: calc(var(--flap-w) * 1.3);
 
   position: relative;
   width: var(--flap-w);
   height: var(--flap-h);
   overflow: hidden;
-  border: 1px solid var(--board-edge);
-  border-radius: 0.65rem;
-  background: var(--board-surface);
-  box-shadow: 0 0.6rem 1.4rem color-mix(in srgb, #000000 18%, transparent);
   color: var(--board-text);
+  background: var(--board-surface);
+  border: 1px solid var(--board-edge);
+  border-radius: 0.7rem;
+  box-shadow: 0 0.75rem 1.7rem color-mix(in srgb, #000000 20%, transparent);
   font-family: var(--data);
   font-size: calc(var(--flap-w) * 0.72);
   font-weight: 650;
@@ -199,12 +191,12 @@ body {
 .flap__face--top {
   top: 0;
   border-bottom: 1px solid #000000;
-  border-radius: 0.65rem 0.65rem 0 0;
+  border-radius: 0.7rem 0.7rem 0 0;
 }
 
 .flap__face--bottom {
   bottom: 0;
-  border-radius: 0 0 0.65rem 0.65rem;
+  border-radius: 0 0 0.7rem 0.7rem;
 }
 
 .flap__glyph {
@@ -253,10 +245,10 @@ body {
   margin: 0;
   color: var(--ink);
   font-family: var(--data);
-  font-size: clamp(3rem, 16vw, 4.75rem);
+  font-size: clamp(3.25rem, 11vw, 5rem);
   font-weight: 650;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.07em;
+  letter-spacing: -0.075em;
   line-height: 1;
 }
 
@@ -264,21 +256,21 @@ body {
   min-height: 1.5em;
   margin: 1.75rem 0 0;
   color: var(--ink);
-  font-size: clamp(1.0625rem, 4.5vw, 1.25rem);
-  font-weight: 600;
+  font-size: clamp(1.0625rem, 2.5vw, 1.25rem);
+  font-weight: 650;
   line-height: 1.45;
 }
 
 .reassurance {
-  max-width: 26rem;
+  max-width: 27rem;
   margin: 1rem auto 0;
   color: var(--muted);
   font-size: 0.9375rem;
-  line-height: 1.6;
+  line-height: 1.65;
 }
 
 .notice {
-  max-width: 26rem;
+  max-width: 27rem;
   margin: 1.25rem auto 0;
   padding: 0.75rem 0.9rem;
   color: var(--ink);
@@ -293,14 +285,13 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.7rem;
-  margin: 2.5rem 0 0;
-  padding-top: 1.1rem;
+  gap: 0.75rem;
+  margin: 2rem 0 0;
+  padding: 0;
   color: var(--muted);
-  border-top: 1px solid var(--line);
   font-family: var(--data);
   font-size: 0.6875rem;
-  font-weight: 600;
+  font-weight: 650;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -312,8 +303,8 @@ body {
 }
 
 .connection::before {
-  width: 0.45rem;
-  height: 0.45rem;
+  width: 0.5rem;
+  height: 0.5rem;
   content: "";
   background: var(--accent);
   border-radius: 50%;
@@ -337,21 +328,38 @@ body {
   50% { opacity: 0.25; }
 }
 
-@media (max-width: 30rem) {
+@media (max-width: 48rem) {
   body {
-    padding: 0;
-    background: var(--surface);
+    place-items: start center;
   }
 
   #anteroom {
-    min-height: 100svh;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    border: 0;
-    border-radius: 0;
-    box-shadow: none;
+    max-width: 36rem;
+    grid-template-columns: 1fr;
+    gap: 2rem;
   }
+
+  .queue-intro {
+    padding: 0 0 0 1.25rem;
+  }
+
+  .room-title {
+    max-width: 12ch;
+    font-size: clamp(2.5rem, 12vw, 4rem);
+  }
+
+}
+
+@media (max-width: 30rem) {
+  body {
+    padding: 1.25rem;
+  }
+
+  .queue-stage {
+    padding: 2rem 1.25rem;
+    border-radius: 1rem;
+  }
+
 }
 
 @media (prefers-reduced-motion: reduce) {
