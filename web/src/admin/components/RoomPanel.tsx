@@ -1,10 +1,11 @@
-import { memo, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import type { Room } from "../api";
+import { csvFilename, toCSV, SPARK_HISTORY, type Sample } from "../history";
 import { Sparkline } from "./Sparkline";
 
 type Props = {
   room: Room;
-  history: number[];
+  history: Sample[];
   busy: boolean;
   onPause: (room: string, paused: boolean) => void;
   onFlush: (room: string) => void;
@@ -20,6 +21,16 @@ export const RoomPanel = memo(function RoomPanel({
   onConfig,
 }: Props) {
   const [confirmingFlush, setConfirmingFlush] = useState(false);
+
+  // The sparkline shows the recent shape; the export keeps far more than that.
+  const depths = useMemo(
+    () => history.slice(-SPARK_HISTORY).map((sample) => sample.waiting),
+    [history],
+  );
+
+  const exportCSV = useCallback(() => {
+    downloadCSV(csvFilename(room.room), toCSV(history));
+  }, [history, room.room]);
 
   return (
     <section className="panel" aria-labelledby={`room-${room.room}`}>
@@ -51,7 +62,7 @@ export const RoomPanel = memo(function RoomPanel({
         <Tile label="Admitted so far" value={format(room.total_admitted)} />
       </div>
 
-      <Sparkline values={history} label={`${room.room} queue depth`} />
+      <Sparkline values={depths} label={`${room.room} queue depth`} />
 
       <dl className="ledger">
         <Ledger label="Joined" value={room.total_joined} />
@@ -122,10 +133,39 @@ export const RoomPanel = memo(function RoomPanel({
             Empty the queue
           </button>
         )}
+
+        {/* The history the dashboard has already collected, for a post-mortem.
+            It is what this browser saw, so a tab opened mid-incident exports
+            from the moment it was opened, not from the start of the drop. */}
+        <button
+          type="button"
+          className="button button--quiet"
+          disabled={history.length === 0}
+          onClick={exportCSV}
+          title={
+            history.length === 0
+              ? "Nothing recorded yet"
+              : `${history.length} samples since this page was opened`
+          }
+        >
+          Export CSV
+        </button>
       </div>
     </section>
   );
 });
+
+/** Hands the browser a file without a round trip to the server. */
+function downloadCSV(filename: string, csv: string) {
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  // Revoked on the next tick rather than immediately: the click is handled
+  // asynchronously, and dropping the URL first cancels the download in Safari.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
 
 function RateForm({
   room,

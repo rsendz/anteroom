@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Api, ApiError, type Room, type Status } from "./api";
+import { appendSample, type Sample } from "./history";
 
-/** How many samples the sparklines keep. At 2s a poll, this is two minutes. */
-const HISTORY = 60;
 const POLL_MS = 2000;
 
-export type RoomHistory = Map<string, number[]>;
+export type RoomHistory = Map<string, Sample[]>;
 
 export type RoomsState = {
   rooms: Room[];
@@ -50,12 +49,20 @@ export function useRooms(api: Api): RoomsState {
         const { rooms: next } = await api.listRooms(signal);
         if (signal.aborted) return;
 
+        const t = Date.now();
         for (const room of next) {
-          // A new array each time, not a push: the panels are memoised on this
-          // prop, so mutating it in place would leave them rendering the first
-          // sample forever.
-          const series = [...(history.current.get(room.room) ?? []), room.waiting];
-          history.current.set(room.room, series.slice(-HISTORY));
+          // appendSample returns a new array rather than pushing: the panels
+          // are memoised on this prop, so mutating it in place would leave
+          // them rendering the first sample forever.
+          history.current.set(
+            room.room,
+            appendSample(history.current.get(room.room), {
+              t,
+              waiting: room.waiting,
+              active: room.active,
+              admitted: room.total_admitted,
+            }),
+          );
         }
         setRooms(next);
         setError(null);
