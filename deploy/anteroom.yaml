@@ -22,8 +22,8 @@ rooms:
     max_active: 3
     session_ttl: 60s
     abandon_after: 20s
-    title: "The shop is busy"
-    message: "We're letting people in a few at a time so the checkout stays fast."
+    title: "The site is busy"
+    message: "We're letting people through gradually to keep the site running smoothly."
 
   # A second room on the same instance, to show host-based routing. Reach it
   # with: curl -H "Host: tickets.localhost" http://localhost:8080/

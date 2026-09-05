@@ -87,10 +87,6 @@ function Dashboard({
   return (
     <div className="shell">
       <header className="masthead">
-        <p className="sign">
-          <span className="sign__mark">&#9679;</span>
-          <span>Anteroom</span>
-        </p>
         <h1 className="masthead__title">Control room</h1>
         <p className="masthead__summary">
           {loading

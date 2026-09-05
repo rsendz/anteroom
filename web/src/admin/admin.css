@@ -1,24 +1,40 @@
-/*
- * The control room shares the waiting page's palette — the same building, seen
- * from behind the desk — but trades its ceremony for density. Where the
- * visitor gets one number the size of a wall board, the operator gets every
- * number at once and the controls to change them.
- */
+/* System-aware controls with queue data kept visually primary. */
 
 :root {
-  --hall: #16211f;
-  --panel: #1b2926;
-  --panel-edge: #2c3f3a;
-  --leaf: #0f1817;
-  --bone: #e8e2d4;
-  --brass: #c9a227;
-  --muted: #7c8a86;
-  --alarm: #d4713f;
+  --canvas: #f5f6f8;
+  --surface: #ffffff;
+  --surface-subtle: #eef1f4;
+  --ink: #17191d;
+  --muted: #606874;
+  --line: #d9dee5;
+  --accent: #2563eb;
+  --accent-soft: #e8f0ff;
+  --on-accent: #ffffff;
+  --success: #16794e;
+  --warning: #a15c00;
+  --danger: #b42318;
 
-  --board: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
-  --prose: ui-serif, Georgia, "Iowan Old Style", "Times New Roman", serif;
+  --body: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --data: var(--body);
 
-  color-scheme: dark;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --canvas: #101216;
+    --surface: #181b20;
+    --surface-subtle: #22262d;
+    --ink: #f3f5f7;
+    --muted: #a3abb7;
+    --line: #343a44;
+    --accent: #7ca9ff;
+    --accent-soft: #1c2c4b;
+    --on-accent: #101216;
+    --success: #57c995;
+    --warning: #f0ad4e;
+    --danger: #ff8277;
+  }
 }
 
 *,
@@ -28,87 +44,84 @@
 }
 
 body {
-  margin: 0;
   min-height: 100vh;
-  background: var(--hall);
-  color: var(--bone);
-  font-family: var(--prose);
+  margin: 0;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--body);
   font-size: 16px;
 }
 
-/* --- Shell -------------------------------------------------------------- */
+button,
+input {
+  font: inherit;
+}
 
 .shell,
 .gate {
-  max-width: 60rem;
+  width: min(100%, 72rem);
   margin: 0 auto;
-  padding: 3rem 1.5rem 6rem;
+  padding: clamp(1.5rem, 5vw, 4rem) clamp(1rem, 4vw, 2rem) 6rem;
 }
 
 .gate {
-  max-width: 26rem;
-  padding-top: 14vh;
-}
-
-.sign {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  margin: 0;
-  font-family: var(--board);
-  font-size: 0.6875rem;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.sign__mark {
-  color: var(--brass);
+  width: min(100%, 30rem);
+  padding-top: 16vh;
 }
 
 .masthead {
+  position: relative;
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: end;
   gap: 0.35rem 1rem;
-  padding-bottom: 1.5rem;
-  border-bottom: 1px solid var(--panel-edge);
   margin-bottom: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--line);
 }
 
-.masthead .sign {
+.masthead::after {
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 4rem;
+  height: 2px;
+  content: "";
+  background: var(--accent);
+  border-radius: 999px;
+}
+
+.masthead__title,
+.masthead__summary {
   grid-column: 1;
 }
 
 .masthead__title {
-  grid-column: 1;
-  margin: 0.4rem 0 0;
-  font-size: 1.75rem;
-  font-weight: 400;
-  letter-spacing: -0.015em;
+  margin: 0.45rem 0 0;
+  font-size: clamp(1.75rem, 4vw, 2.25rem);
+  font-weight: 650;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
 }
 
 .masthead__summary {
-  grid-column: 1;
-  margin: 0.25rem 0 0;
+  margin: 0.15rem 0 0;
   color: var(--muted);
-  font-family: var(--board);
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
 }
 
 .masthead > .button {
   grid-column: 2;
-  grid-row: 1 / span 4;
+  grid-row: 1 / span 3;
   align-self: end;
 }
 
-/* --- Gate --------------------------------------------------------------- */
-
 .gate__title {
-  margin: 0.6rem 0 0;
+  margin: 0.65rem 0 0;
   font-size: 2rem;
-  font-weight: 400;
-  letter-spacing: -0.02em;
+  font-weight: 650;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
 }
 
 .gate__lede {
@@ -121,26 +134,44 @@ body {
   display: grid;
   gap: 1rem;
   justify-items: start;
+  padding: 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
 }
 
 .gate__error {
   margin-top: 1.25rem;
-  color: var(--alarm);
+  color: var(--danger);
   font-size: 0.9375rem;
 }
 
-/* --- Panels ------------------------------------------------------------- */
-
 .panels {
   display: grid;
-  gap: 1.5rem;
+  gap: 1.25rem;
 }
 
 .panel {
-  padding: 1.5rem;
-  border: 1px solid var(--panel-edge);
-  border-radius: 0.6rem;
-  background: var(--panel);
+  --room-status: var(--accent);
+
+  overflow: hidden;
+  padding: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--room-status);
+  border-radius: 0.65rem;
+}
+
+.panel:has(.badge--open) {
+  --room-status: var(--success);
+}
+
+.panel:has(.badge--waiting) {
+  --room-status: var(--accent);
+}
+
+.panel:has(.badge--paused) {
+  --room-status: var(--danger);
 }
 
 .panel__head {
@@ -148,255 +179,276 @@ body {
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 1.5rem;
+  margin: 0;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--line);
 }
 
 .panel__name {
   margin: 0;
-  font-family: var(--board);
   font-size: 1.125rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  font-weight: 650;
+  letter-spacing: -0.02em;
 }
 
 .panel__route {
   margin: 0.35rem 0 0;
   color: var(--muted);
-  font-family: var(--board);
+  font-family: var(--data);
   font-size: 0.75rem;
   word-break: break-all;
 }
 
 .panel__arrow {
-  color: var(--brass);
+  color: var(--accent);
 }
 
 .badge {
   flex-shrink: 0;
-  padding: 0.25rem 0.6rem;
+  padding: 0.3rem 0.6rem;
   border-radius: 999px;
-  font-family: var(--board);
-  font-size: 0.6875rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-family: var(--body);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   white-space: nowrap;
 }
 
 .badge--open {
-  color: var(--brass);
-  border: 1px solid color-mix(in srgb, var(--brass) 40%, transparent);
-  background: color-mix(in srgb, var(--brass) 10%, transparent);
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--success) 30%, var(--line));
 }
 
 .badge--waiting {
   color: var(--muted);
-  border: 1px solid var(--panel-edge);
-  background: var(--leaf);
-}
-
-.schedule {
-  margin: -0.75rem 0 1.25rem;
-  font-family: var(--board);
-  font-size: 0.8125rem;
-  color: var(--brass);
+  background: var(--surface-subtle);
+  border: 1px solid var(--line);
 }
 
 .badge--paused {
-  color: var(--alarm);
-  border: 1px solid color-mix(in srgb, var(--alarm) 45%, transparent);
-  background: color-mix(in srgb, var(--alarm) 12%, transparent);
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 28%, var(--line));
 }
 
-/* --- Tiles -------------------------------------------------------------- */
+.schedule {
+  margin: 0;
+  padding: 0.8rem 1.5rem;
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 7%, var(--surface));
+  border-bottom: 1px solid var(--line);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
 
 .tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
-  gap: 1px;
-  background: var(--panel-edge);
-  border: 1px solid var(--panel-edge);
-  border-radius: 0.45rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   overflow: hidden;
-  margin-bottom: 1.25rem;
+  margin: 0;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
 }
 
 .tile {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-  padding: 0.9rem 1rem;
-  background: var(--leaf);
+  min-width: 0;
+  padding: 1.2rem 1.5rem;
+  border-right: 1px solid var(--line);
+}
+
+.tile:last-child {
+  border-right: 0;
 }
 
 .tile__value {
-  font-family: var(--board);
-  font-size: 1.375rem;
-  font-weight: 600;
+  overflow: hidden;
+  font-family: var(--data);
+  font-size: clamp(1.125rem, 3vw, 1.5rem);
+  font-weight: 650;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+  text-overflow: ellipsis;
 }
 
 .tile__label {
-  font-size: 0.75rem;
   color: var(--muted);
+  font-size: 0.75rem;
 }
-
-/* --- Sparkline ---------------------------------------------------------- */
 
 .sparkline-row {
   display: flex;
   align-items: center;
   gap: 0.9rem;
-  margin-bottom: 1.25rem;
+  margin: 0;
+  padding: 1rem 1.5rem;
+  background: var(--surface-subtle);
+  border-bottom: 1px solid var(--line);
 }
 
 .sparkline {
   display: block;
   flex: 1;
-  height: 2.25rem;
   min-width: 0;
+  height: 2.25rem;
 }
 
-/* The range the line is drawn against, since it is not scaled from zero. */
+.sparkline__caption,
+.sparkline--empty {
+  color: var(--muted);
+  font-family: var(--data);
+  font-size: 0.6875rem;
+}
+
 .sparkline__caption {
   flex-shrink: 0;
-  font-family: var(--board);
-  font-size: 0.6875rem;
-  letter-spacing: 0.06em;
-  color: var(--muted);
+  letter-spacing: 0.04em;
 }
 
 .sparkline--empty {
   display: flex;
   align-items: center;
-  font-family: var(--board);
-  font-size: 0.75rem;
-  color: var(--muted);
 }
 
 .sparkline__line {
   fill: none;
-  stroke: var(--brass);
+  stroke: var(--accent);
   stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
   stroke-linejoin: round;
 }
 
-/* --- Ledger ------------------------------------------------------------- */
-
 .ledger {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
-  gap: 0.5rem 1.5rem;
-  margin: 0 0 1.5rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--panel-edge);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.65rem 1.5rem;
+  margin: 0;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--line);
 }
 
 .ledger__row {
   display: flex;
   justify-content: space-between;
   gap: 0.75rem;
+  min-width: 0;
   font-size: 0.8125rem;
 }
 
 .ledger dt {
+  overflow: hidden;
   color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ledger dd {
   margin: 0;
-  font-family: var(--board);
+  font-family: var(--data);
   font-variant-numeric: tabular-nums;
 }
-
-/* --- Controls ----------------------------------------------------------- */
 
 .rate-form {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
   gap: 0.75rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--panel-edge);
+  padding: 1.25rem 1.5rem;
+  background: color-mix(in srgb, var(--surface-subtle) 70%, var(--surface));
 }
 
 .field {
   display: grid;
-  gap: 0.35rem;
+  gap: 0.4rem;
 }
 
 .field__label {
-  font-size: 0.75rem;
   color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
 .field__input {
-  width: 7rem;
-  padding: 0.5rem 0.65rem;
-  border: 1px solid var(--panel-edge);
-  border-radius: 0.35rem;
-  background: var(--leaf);
-  color: var(--bone);
-  font-family: var(--board);
+  width: 8rem;
+  min-height: 2.5rem;
+  padding: 0.55rem 0.7rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  font-family: var(--data);
   font-size: 0.9375rem;
   font-variant-numeric: tabular-nums;
 }
 
 .field__input--wide {
   width: 100%;
-  min-width: 16rem;
+  min-width: min(18rem, calc(100vw - 5rem));
+}
+
+.field__input:hover {
+  border-color: color-mix(in srgb, var(--ink) 35%, var(--line));
 }
 
 .field__input:focus-visible,
 .button:focus-visible {
-  outline: 2px solid var(--brass);
+  outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent);
   outline-offset: 2px;
+  border-color: var(--accent);
 }
 
 .button {
-  padding: 0.5rem 0.9rem;
-  border: 1px solid var(--panel-edge);
-  border-radius: 0.35rem;
-  background: var(--leaf);
-  color: var(--bone);
-  font-family: var(--board);
+  min-height: 2.5rem;
+  padding: 0.55rem 0.9rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
   font-size: 0.8125rem;
-  letter-spacing: 0.04em;
+  font-weight: 600;
   cursor: pointer;
-  transition: border-color 0.15s ease, color 0.15s ease;
+  touch-action: manipulation;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
 .button:hover:not(:disabled) {
-  border-color: var(--brass);
+  background: var(--surface-subtle);
+  border-color: color-mix(in srgb, var(--ink) 35%, var(--line));
+}
+
+.button:active:not(:disabled) {
+  background: var(--surface-subtle);
 }
 
 .button:disabled {
-  opacity: 0.4;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
 .button--primary {
-  color: var(--hall);
-  background: var(--brass);
-  border-color: var(--brass);
-  font-weight: 600;
+  color: var(--on-accent);
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 .button--primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--brass) 85%, white);
+  background: color-mix(in srgb, var(--accent) 85%, #000000);
+  border-color: color-mix(in srgb, var(--accent) 85%, #000000);
 }
 
 .button--danger {
-  color: var(--alarm);
-  border-color: color-mix(in srgb, var(--alarm) 50%, transparent);
-}
-
-.button--danger:hover:not(:disabled) {
-  border-color: var(--alarm);
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--line));
 }
 
 .button--quiet {
   color: var(--muted);
+  background: transparent;
 }
 
 .panel__actions {
@@ -404,9 +456,9 @@ body {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem;
-  margin-top: 1.25rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--panel-edge);
+  margin: 0;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--line);
 }
 
 .confirm {
@@ -417,57 +469,101 @@ body {
 }
 
 .confirm__question {
+  color: var(--ink);
   font-size: 0.875rem;
-  color: var(--bone);
 }
 
-/* --- Messages ----------------------------------------------------------- */
+.banner,
+.warn {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, var(--line));
+  border-radius: 0.6rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
 
 .banner {
-  margin: 0 0 1.5rem;
+  margin: 0 0 1rem;
   padding: 0.8rem 1rem;
-  border: 1px solid color-mix(in srgb, var(--alarm) 45%, transparent);
-  border-radius: 0.4rem;
-  background: color-mix(in srgb, var(--alarm) 10%, transparent);
-  font-size: 0.9375rem;
 }
 
-/* Reserved for the one condition that means anteroom is not protecting
-   anything: unmissable, and never used for ordinary errors. */
 .banner--alarm {
-  border-color: var(--alarm);
-  border-left-width: 4px;
-  background: color-mix(in srgb, var(--alarm) 18%, transparent);
+  border-left: 4px solid var(--danger);
 }
 
 .empty {
-  padding: 2.5rem 0;
+  padding: 3rem 0;
   color: var(--muted);
   text-align: center;
 }
 
 .warn {
-  margin: 0 0 1.5rem;
-  padding: 0.7rem 0.9rem;
-  border-left: 2px solid var(--alarm);
-  background: color-mix(in srgb, var(--alarm) 8%, transparent);
-  font-size: 0.875rem;
-  line-height: 1.5;
+  margin: 0 0 1.25rem;
+  padding: 0.75rem 0.9rem;
+  border-left: 3px solid var(--danger);
 }
 
 .warn code {
-  font-family: var(--board);
+  font-family: var(--data);
   font-size: 0.8125rem;
+}
+
+@media (max-width: 48rem) {
+  .tiles,
+  .ledger {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tile:nth-child(2) {
+    border-right: 0;
+  }
+
+  .tile:nth-child(-n + 2) {
+    border-bottom: 1px solid var(--line);
+  }
 }
 
 @media (max-width: 32rem) {
   .masthead {
     grid-template-columns: 1fr;
   }
+
   .masthead > .button {
     grid-column: 1;
     grid-row: auto;
     justify-self: start;
-    margin-top: 1rem;
+    margin-top: 0.75rem;
+  }
+
+  .ledger {
+    grid-template-columns: 1fr;
+  }
+
+  .panel__head,
+  .schedule,
+  .tile,
+  .sparkline-row,
+  .ledger,
+  .rate-form,
+  .panel__actions {
+    padding-inline: 1rem;
+  }
+
+  .rate-form .field {
+    flex: 1 1 8rem;
+  }
+
+  .field__input {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }

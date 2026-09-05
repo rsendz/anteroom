@@ -73,7 +73,7 @@ function main(): void {
     render(initial);
   }
   if (root.dataset.degraded === "1") {
-    setNotice("We can't reach the queue right now. Your place is held — this page keeps trying.");
+    setNotice("We can't reach the queue right now. Your place is held. This page keeps trying.");
   }
 
   function render(update: Update): void {
@@ -99,7 +99,7 @@ function main(): void {
     if (phase === "closed") {
       etaEl.textContent = "This room has closed.";
     } else if (update.paused) {
-      etaEl.textContent = "Admissions are paused. You keep your place.";
+      etaEl.textContent = "The line is paused. Your place is saved.";
     } else if (update.position === 1) {
       etaEl.textContent = "You're next.";
     } else if (update.eta_secs > 0) {
@@ -150,7 +150,7 @@ function main(): void {
   });
 
   source.addEventListener("stalled", () => {
-    setNotice("We can't reach the queue right now. Your place is held — this page keeps trying.");
+    setNotice("We can't reach the queue right now. Your place is held. This page keeps trying.");
   });
 
   source.addEventListener("admitted", () => {

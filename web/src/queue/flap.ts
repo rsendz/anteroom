@@ -1,7 +1,7 @@
 /**
  * A split-flap display, the kind that clacks over on a station departure
  * board. It is here because a number that visibly turns over is the clearest
- * proof a queue is moving — which is the one thing a waiting visitor wants to
+ * proof a queue is moving, which is the one thing a waiting visitor wants to
  * know, and the reason they would otherwise keep hitting reload.
  */
 

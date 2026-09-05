@@ -15,10 +15,6 @@ export function TokenGate({ onSubmit, message }: Props) {
 
   return (
     <main className="gate">
-      <p className="sign">
-        <span className="sign__mark">&#9679;</span>
-        <span>Anteroom</span>
-      </p>
       <h1 className="gate__title">Control room</h1>
       <p className="gate__lede">
         Enter the admin token from your anteroom config to see the rooms and change how fast
@@ -37,11 +33,11 @@ export function TokenGate({ onSubmit, message }: Props) {
           <span className="field__label">Admin token</span>
           <input
             className="field__input field__input--wide"
+            name="admin_token"
             type="password"
             autoComplete="current-password"
             value={token}
             onChange={(e) => setToken(e.target.value)}
-            autoFocus
           />
         </label>
         <button type="submit" className="button button--primary" disabled={token.trim() === ""}>
